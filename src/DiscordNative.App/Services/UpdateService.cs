@@ -58,7 +58,7 @@ public static class UpdateService
 
             var includeExp = string.Equals(App.Settings.Current.UpdateChannel, "Experimental", StringComparison.OrdinalIgnoreCase);
             var latest = releases.FirstOrDefault(r => includeExp || !r.Prerelease) ?? releases[0];
-            var currentVersion = "v0.3.1";
+            var currentVersion = "v0.3.2";
 
             if (latest.TagName != currentVersion && !latest.TagName.Equals(currentVersion + "-exp", StringComparison.OrdinalIgnoreCase))
             {

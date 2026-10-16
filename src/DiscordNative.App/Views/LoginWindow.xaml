@@ -26,7 +26,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="TabQrButton" Content="📲 Code QR" Grid.Column="0" HorizontalAlignment="Stretch" Margin="0,0,3,0"
+                    <Button x:Name="TabQrButton" Content="Code QR" Grid.Column="0" HorizontalAlignment="Stretch" Margin="0,0,3,0"
                             Style="{StaticResource AccentButtonStyle}" Click="OnTabQrClicked" />
                     <Button x:Name="TabCredentialsButton" Content="Identifiants" Grid.Column="1" HorizontalAlignment="Stretch" Margin="3,0,3,0"
                             Click="OnTabCredentialsClicked" />
@@ -63,8 +63,12 @@
                         </StackPanel>
                     </Border>
 
-                    <Button x:Name="RefreshQrButton" Content="🔄 Actualiser le code QR" HorizontalAlignment="Stretch"
-                            Click="OnRefreshQrClicked" />
+                    <Button x:Name="RefreshQrButton" HorizontalAlignment="Stretch" Click="OnRefreshQrClicked">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
+                            <FontIcon Glyph="&#xE72C;" FontSize="13" />
+                            <TextBlock Text="Actualiser le code QR" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- Mode 1 : Email / Mot de passe -->

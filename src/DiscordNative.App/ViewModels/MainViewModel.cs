@@ -354,7 +354,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 var bytes = Encoding.UTF8.GetBytes(content);
                 CancelComposerAction();
-                await _client.Rest.SendBytesAsync(_selectedChannel.Id, bytes, "message.txt", "📄 Message long envoyé sous forme de fichier :");
+                await _client.Rest.SendBytesAsync(_selectedChannel.Id, bytes, "message.txt", "Message long envoyé sous forme de fichier :");
                 return;
             }
 

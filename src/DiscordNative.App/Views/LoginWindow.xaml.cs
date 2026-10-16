@@ -157,7 +157,7 @@ public sealed partial class LoginWindow : Window
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            QrStatusText.Text = $"✓ Scanné par {user.DisplayTag} ! Confirmez la connexion sur votre smartphone...";
+            QrStatusText.Text = $"Scanné par {user.DisplayTag} ! Confirmez la connexion sur votre smartphone...";
         });
     }
 
