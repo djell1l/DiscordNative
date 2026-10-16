@@ -76,14 +76,9 @@ AI is the future — why whisper about it on GitHub like it's a dirty secret? Wh
   <a href="https://github.com/djell1l">
     <img src="https://github.com/djell1l.png" width="60" height="60" style="border-radius: 50%;" alt="djell1l" />
   </a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/Oleglog">
-    <img src="https://github.com/Oleglog.png" width="60" height="60" style="border-radius: 50%;" alt="Oleglog" />
-  </a>
 </p>
 
 - **[djell1l](https://github.com/djell1l)** — Lead developer & creator
-- **[Oleglog](https://github.com/Oleglog)** — Contributor (integrated QR Remote Auth v2, MFA flows, and CI pipeline for v0.3.1)
 - **[Claude](https://github.com/anthropics)** ([@anthropics](https://github.com/anthropics)) & **[Gemini](https://github.com/google-gemini)** ([@google-gemini](https://github.com/google-gemini)) via **[Antigravity](https://github.com/google-deepmind)** ([@google-deepmind](https://github.com/google-deepmind)) — AI pair programming collaborators and architecture co-design
 - **[SakuraCord](https://github.com/SakuraCordApp/SakuraCord)** — Concept and native client philosophy
 - **[Files](https://github.com/files-community/Files)** — UI/UX inspiration for WinUI 3 controls and background customization
