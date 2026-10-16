@@ -9,42 +9,120 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Zone de titre custom pour garder un look natif épuré -->
         <Grid Grid.Row="0" x:Name="AppTitleBar" Background="Transparent" />
 
-        <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Width="360" Spacing="16">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Width="390" Spacing="16" Padding="0,24">
 
-            <TextBlock Text="Connexion à Discord" FontSize="24" FontWeight="SemiBold"
-                       HorizontalAlignment="Center" Margin="0,0,0,8" />
+                <TextBlock Text="Connexion à Diswin" FontSize="24" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Margin="0,0,0,4" />
 
-            <!-- Étape 1 : email / mot de passe -->
-            <StackPanel x:Name="CredentialsPanel" Spacing="12">
-                <TextBox x:Name="EmailBox" PlaceholderText="E-mail ou numéro de téléphone"
-                         Header="Adresse e-mail" />
-                <PasswordBox x:Name="PasswordBox" PlaceholderText="Mot de passe"
-                             Header="Mot de passe" />
-                <Button x:Name="LoginButton" Content="Se connecter" HorizontalAlignment="Stretch"
-                        Style="{StaticResource AccentButtonStyle}" Click="OnLoginClicked" />
+                <!-- Sélecteur de méthode de connexion (100% WinUI 3 natif : Code QR / Identifiants / Jeton) -->
+                <Grid x:Name="LoginTabsGrid" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                      CornerRadius="8" Padding="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="TabQrButton" Content="📲 Code QR" Grid.Column="0" HorizontalAlignment="Stretch" Margin="0,0,3,0"
+                            Style="{StaticResource AccentButtonStyle}" Click="OnTabQrClicked" />
+                    <Button x:Name="TabCredentialsButton" Content="Identifiants" Grid.Column="1" HorizontalAlignment="Stretch" Margin="3,0,3,0"
+                            Click="OnTabCredentialsClicked" />
+                    <Button x:Name="TabTokenButton" Content="Jeton (Token)" Grid.Column="2" HorizontalAlignment="Stretch" Margin="3,0,0,0"
+                            Click="OnTabTokenClicked" />
+                </Grid>
+
+                <!-- Mode 0 : Connexion directe par QR Code officiel Discord Remote Auth v2 -->
+                <StackPanel x:Name="QrPanel" Spacing="12">
+                    <TextBlock Text="Scannez avec l'application mobile Discord"
+                               FontSize="13" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" TextAlignment="Center" />
+
+                    <Border Background="White" CornerRadius="12" Padding="12"
+                            HorizontalAlignment="Center"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <Grid Width="220" Height="220">
+                            <ProgressRing x:Name="QrLoadingRing" IsActive="True"
+                                          Width="40" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Image x:Name="QrCodeImage" Width="220" Height="220" Visibility="Collapsed" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock x:Name="QrStatusText"
+                               Text="Génération du code QR..."
+                               FontSize="12" Opacity="0.85" TextAlignment="Center" TextWrapping="Wrap" />
+
+                    <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                            CornerRadius="8" Padding="12" Margin="0,2,0,0">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="1. Ouvrez l'application Discord sur votre téléphone" FontSize="11" Opacity="0.8" TextWrapping="Wrap" />
+                            <TextBlock Text="2. Allez dans Paramètres &gt; Scanner le code QR" FontSize="11" Opacity="0.8" TextWrapping="Wrap" />
+                            <TextBlock Text="3. Scannez ce code et appuyez sur « Se connecter »" FontSize="11" Opacity="0.8" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <Button x:Name="RefreshQrButton" Content="🔄 Actualiser le code QR" HorizontalAlignment="Stretch"
+                            Click="OnRefreshQrClicked" />
+                </StackPanel>
+
+                <!-- Mode 1 : Email / Mot de passe -->
+                <StackPanel x:Name="CredentialsPanel" Spacing="12" Visibility="Collapsed">
+                    <TextBox x:Name="EmailBox" PlaceholderText="E-mail ou numéro de téléphone"
+                             Header="Adresse e-mail" />
+                    <PasswordBox x:Name="PasswordBox" PlaceholderText="Mot de passe"
+                                 Header="Mot de passe" />
+                    <Button x:Name="LoginButton" Content="Se connecter" HorizontalAlignment="Stretch"
+                            Style="{StaticResource AccentButtonStyle}" Click="OnLoginClicked" />
+                </StackPanel>
+
+                <!-- Mode 2 : Connexion directe par Token -->
+                <StackPanel x:Name="TokenPanel" Spacing="12" Visibility="Collapsed">
+                    <TextBox x:Name="TokenBox" PlaceholderText="Collez votre jeton utilisateur Discord"
+                             Header="Jeton de compte (User Token)" />
+                    <TextBlock Text="Idéal si le 2FA ou le captcha bloque : copiez depuis Discord Web &gt; F12 (DevTools) &gt; Console &gt; localStorage.token."
+                               FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
+                    <Button x:Name="TokenLoginButton" Content="Se connecter avec le jeton" HorizontalAlignment="Stretch"
+                            Style="{StaticResource AccentButtonStyle}" Click="OnTokenLoginClicked" />
+                </StackPanel>
+
+                <!-- Étape 2FA : affichée si le compte requiert MFA -->
+                <StackPanel x:Name="MfaPanel" Spacing="12" Visibility="Collapsed">
+                    <TextBlock Text="Vérification en deux étapes (2FA)" FontWeight="SemiBold" FontSize="16" />
+                    <TextBlock x:Name="MfaDescriptionText"
+                               Text="Entrez le code fourni par votre application ou par SMS."
+                               Opacity="0.8" FontSize="12" TextWrapping="Wrap" />
+
+                    <ComboBox x:Name="MfaMethodCombo" Header="Méthode de validation" HorizontalAlignment="Stretch"
+                              SelectionChanged="OnMfaMethodChanged">
+                        <ComboBoxItem Content="Application d'authentification (TOTP)" Tag="totp" IsSelected="True" />
+                        <ComboBoxItem x:Name="MfaSmsComboItem" Content="Code reçu par SMS" Tag="sms" Visibility="Collapsed" />
+                        <ComboBoxItem x:Name="MfaBackupComboItem" Content="Code de secours (Backup)" Tag="backup" />
+                    </ComboBox>
+
+                    <Button x:Name="SendSmsButton" Content="Envoyer un code par SMS" HorizontalAlignment="Stretch"
+                            Visibility="Collapsed" Click="OnSendSmsClicked" />
+
+                    <TextBox x:Name="MfaCodeBox" PlaceholderText="Code 2FA (ex: 123456 ou code secours)"
+                             Header="Code de vérification" />
+
+                    <Button x:Name="MfaButton" Content="Valider le code" HorizontalAlignment="Stretch"
+                            Style="{StaticResource AccentButtonStyle}" Click="OnMfaClicked" />
+                    <Button x:Name="MfaBackButton" Content="Retour" HorizontalAlignment="Stretch"
+                            Click="OnMfaBackClicked" />
+                    <Button x:Name="MfaSwitchToTokenButton" Content="Se connecter avec un Jeton (Token)" HorizontalAlignment="Stretch"
+                            Click="OnMfaSwitchToTokenClicked" />
+                </StackPanel>
+
+                <ProgressRing x:Name="LoadingRing" IsActive="False" Width="24" Height="24"
+                              HorizontalAlignment="Center" />
+
+                <InfoBar x:Name="ErrorBar" Severity="Error" IsOpen="False" Title="Erreur" Message="" />
+
+                <TextBlock Text="Client non officiel, non affilié à Discord Inc. L'usage de ce client peut enfreindre les conditions d'utilisation de Discord."
+                           FontSize="11" Opacity="0.6" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0" />
             </StackPanel>
-
-            <!-- Étape 2 : code 2FA, masquée par défaut -->
-            <StackPanel x:Name="MfaPanel" Spacing="12" Visibility="Collapsed">
-                <TextBlock Text="Vérification en deux étapes" FontWeight="SemiBold" />
-                <TextBox x:Name="MfaCodeBox" PlaceholderText="Code à 6 chiffres"
-                         Header="Code de votre application d'authentification"
-                         MaxLength="6" InputScope="Number" />
-                <Button x:Name="MfaButton" Content="Valider" HorizontalAlignment="Stretch"
-                        Style="{StaticResource AccentButtonStyle}" Click="OnMfaClicked" />
-            </StackPanel>
-
-            <ProgressRing x:Name="LoadingRing" IsActive="False" Width="24" Height="24"
-                          HorizontalAlignment="Center" />
-
-            <InfoBar x:Name="ErrorBar" Severity="Error" IsOpen="False" Title="Erreur" />
-
-            <TextBlock Text="Client non officiel, non affilié à Discord Inc. L'usage de ce client peut enfreindre les conditions d'utilisation de Discord."
-                       FontSize="11" Opacity="0.6" TextWrapping="Wrap" TextAlignment="Center" Margin="0,16,0,0" />
-        </StackPanel>
+        </ScrollViewer>
     </Grid>
 </Window>
