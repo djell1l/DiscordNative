@@ -75,7 +75,7 @@ cd DiscordNative
 - **Claude** & **Gemini** (via **Antigravity**) — AI pair programming collaborators and architecture co-design
 - **[SakuraCord](https://github.com/SakuraCordApp/SakuraCord)** — Concept and native client philosophy
 - **[Files](https://github.com/files-community/Files)** — UI/UX inspiration for WinUI 3 controls and background customization
-- **[Oleglog](https://github.com/Oleglog)** — Community fork contributions on QR & MFA auth flows
+- **[Oleglog](https://github.com/Oleglog)** — Fork contributions integrated for the v0.3.1 release
 
 ---
 
