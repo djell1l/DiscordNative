@@ -48,9 +48,8 @@ cd DiscordNative
 ## Credits & Contributors
 
 - **[djell1l](https://github.com/djell1l)** — Creator & lead developer
-- **[Oleglog](https://github.com/Oleglog)** — Huge thanks for the awesome work on his [fork](https://github.com/Oleglog/DiscordNative), from which we integrated the official Discord Remote Auth v2 QR Code login, complete TOTP/SMS/Backup MFA flows, direct token validation, non-ASCII timezone fixes, and the GitHub Actions CI pipeline
 - **Claude** & **Gemini** (via **Antigravity**) — AI engineering collaborators
-- **[SakuraCord](https://github.com/SakuraCordApp/SakuraCord)** & **[Files](https://github.com/files-community/Files)** — Inspiration for native architecture and WinUI 3 aesthetics
+- **[SakuraCord](https://github.com/SakuraCordApp/SakuraCord)**, **[Files](https://github.com/files-community/Files)** & **[Oleglog](https://github.com/Oleglog)** — Inspiration for native WinUI 3 architecture and great community fork contributions
 
 ---
 
