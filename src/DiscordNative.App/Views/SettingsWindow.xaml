@@ -122,7 +122,7 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="Diswin v0.3.2 — Client WinUI 3 natif non officiel, non affilié à Discord Inc." Opacity="0.5" FontSize="11" />
+                <TextBlock Text="Diswin v0.3.3 — Client WinUI 3 natif non officiel, non affilié à Discord Inc." Opacity="0.5" FontSize="11" />
 
             </StackPanel>
         </ScrollViewer>

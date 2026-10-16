@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using DiscordNative.Protocol.Models;
 
@@ -42,6 +43,67 @@ public sealed class DiscordRestClient : IDisposable
 
     public async Task<List<DiscordGuild>> GetGuildsAsync(CancellationToken ct = default) =>
         await _http.GetFromJsonAsync<List<DiscordGuild>>($"{ApiBase}/users/@me/guilds", ct) ?? new();
+
+    /// <summary>
+    /// Récupère l'ordre officiel des serveurs et dossiers tel que défini dans les paramètres utilisateur Discord (guild_folders / guild_positions).
+    /// </summary>
+    public async Task<List<string>> GetOrderedGuildIdsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var resp = await _http.GetAsync($"{ApiBase}/users/@me/settings", ct);
+            if (!resp.IsSuccessStatusCode) return new();
+
+            using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            return ExtractOrderedGuildIds(doc.RootElement);
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
+    /// <summary>
+    /// Extrait la liste ordonnée des identifiants de serveurs depuis un payload JSON user_settings (REST ou Gateway).
+    /// </summary>
+    public static List<string> ExtractOrderedGuildIds(JsonElement userSettings)
+    {
+        var list = new List<string>();
+
+        // 1. guild_folders : liste ordonnée de dossiers contenant chacun un tableau "guild_ids"
+        if (userSettings.TryGetProperty("guild_folders", out var foldersEl) && foldersEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var folder in foldersEl.EnumerateArray())
+            {
+                if (folder.TryGetProperty("guild_ids", out var gIdsEl) && gIdsEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var idEl in gIdsEl.EnumerateArray())
+                    {
+                        var id = idEl.GetString();
+                        if (!string.IsNullOrEmpty(id) && !list.Contains(id))
+                        {
+                            list.Add(id);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Repli sur guild_positions si guild_folders est absent ou vide
+        if (list.Count == 0 && userSettings.TryGetProperty("guild_positions", out var positionsEl) && positionsEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var idEl in positionsEl.EnumerateArray())
+            {
+                var id = idEl.GetString();
+                if (!string.IsNullOrEmpty(id) && !list.Contains(id))
+                {
+                    list.Add(id);
+                }
+            }
+        }
+
+        return list;
+    }
 
     public async Task<List<DiscordChannel>> GetGuildChannelsAsync(string guildId, CancellationToken ct = default) =>
         await _http.GetFromJsonAsync<List<DiscordChannel>>($"{ApiBase}/guilds/{guildId}/channels", ct) ?? new();

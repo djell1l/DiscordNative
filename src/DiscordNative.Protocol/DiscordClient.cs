@@ -19,6 +19,7 @@ public sealed class DiscordClient : IAsyncDisposable
     private readonly string _token;
     private readonly ILoggerFactory? _loggerFactory;
     private DiscordGatewayClient? _gateway;
+    private List<string> _orderedGuildIds = new();
 
     public DiscordRestClient Rest { get; }
     public DiscordUser? CurrentUser { get; set; }
@@ -68,24 +69,14 @@ public sealed class DiscordClient : IAsyncDisposable
 
         try
         {
+            _orderedGuildIds = await Rest.GetOrderedGuildIdsAsync(ct);
             var guilds = await Rest.GetGuildsAsync(ct);
             if (guilds.Count > 0)
             {
+                var sorted = SortGuilds(guilds, _orderedGuildIds);
                 App.RunOnUiThread(() =>
                 {
-                    foreach (var g in guilds.OrderBy(g => g.Name))
-                    {
-                        var existing = Guilds.FirstOrDefault(item => item.Id == g.Id);
-                        if (existing != null)
-                        {
-                            var idx = Guilds.IndexOf(existing);
-                            Guilds[idx] = g;
-                        }
-                        else
-                        {
-                            Guilds.Add(g);
-                        }
-                    }
+                    SyncGuildsCollection(sorted);
                 });
             }
         }
@@ -97,12 +88,45 @@ public sealed class DiscordClient : IAsyncDisposable
         await _gateway.ConnectAsync(ct);
     }
 
+    public async Task RefreshGuildsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            _orderedGuildIds = await Rest.GetOrderedGuildIdsAsync(ct);
+            var guilds = await Rest.GetGuildsAsync(ct);
+            if (guilds.Count > 0)
+            {
+                var sorted = SortGuilds(guilds, _orderedGuildIds);
+                App.RunOnUiThread(() =>
+                {
+                    SyncGuildsCollection(sorted);
+                });
+            }
+        }
+        catch { }
+    }
+
     private void OnDispatchEvent(DiscordDispatchEvent evt)
     {
         switch (evt.Name)
         {
             case "READY":
                 HandleReady(evt.Data);
+                break;
+            case "USER_SETTINGS_UPDATE":
+                if (evt.Data.TryGetProperty("guild_folders", out _) || evt.Data.TryGetProperty("guild_positions", out _))
+                {
+                    var updatedOrder = DiscordRestClient.ExtractOrderedGuildIds(evt.Data);
+                    if (updatedOrder.Count > 0)
+                    {
+                        _orderedGuildIds = updatedOrder;
+                        App.RunOnUiThread(() =>
+                        {
+                            var sorted = SortGuilds(Guilds.ToList(), _orderedGuildIds);
+                            SyncGuildsCollection(sorted);
+                        });
+                    }
+                }
                 break;
             case "MESSAGE_CREATE":
                 var message = evt.Data.Deserialize<DiscordMessage>(JsonOptions);
@@ -141,9 +165,26 @@ public sealed class DiscordClient : IAsyncDisposable
                         }
                         else
                         {
-                            Guilds.Add(guild);
+                            var currentList = Guilds.ToList();
+                            currentList.Add(guild);
+                            var sorted = SortGuilds(currentList, _orderedGuildIds);
+                            SyncGuildsCollection(sorted);
                         }
                     });
+                }
+                break;
+            case "GUILD_DELETE":
+                if (evt.Data.TryGetProperty("id", out var delIdProp))
+                {
+                    var delId = delIdProp.GetString();
+                    if (!string.IsNullOrEmpty(delId))
+                    {
+                        App.RunOnUiThread(() =>
+                        {
+                            var existing = Guilds.FirstOrDefault(g => g.Id == delId);
+                            if (existing != null) Guilds.Remove(existing);
+                        });
+                    }
                 }
                 break;
         }
@@ -151,6 +192,15 @@ public sealed class DiscordClient : IAsyncDisposable
 
     private void HandleReady(JsonElement data)
     {
+        if (data.TryGetProperty("user_settings", out var userSettingsEl))
+        {
+            var readyOrder = DiscordRestClient.ExtractOrderedGuildIds(userSettingsEl);
+            if (readyOrder.Count > 0)
+            {
+                _orderedGuildIds = readyOrder;
+            }
+        }
+
         if (data.TryGetProperty("guilds", out var guildsEl) && guildsEl.ValueKind == JsonValueKind.Array)
         {
             var validGuilds = new List<DiscordGuild>();
@@ -171,21 +221,10 @@ public sealed class DiscordClient : IAsyncDisposable
 
             if (validGuilds.Count > 0)
             {
+                var sorted = SortGuilds(validGuilds, _orderedGuildIds);
                 App.RunOnUiThread(() =>
                 {
-                    foreach (var g in validGuilds)
-                    {
-                        var existing = Guilds.FirstOrDefault(item => item.Id == g.Id);
-                        if (existing != null)
-                        {
-                            var idx = Guilds.IndexOf(existing);
-                            Guilds[idx] = g;
-                        }
-                        else
-                        {
-                            Guilds.Add(g);
-                        }
-                    }
+                    SyncGuildsCollection(sorted);
                 });
             }
         }
@@ -203,6 +242,55 @@ public sealed class DiscordClient : IAsyncDisposable
                     foreach (var c in sorted) PrivateChannels.Add(c);
                 });
             }
+        }
+    }
+
+    private static List<DiscordGuild> SortGuilds(IEnumerable<DiscordGuild> guilds, List<string> orderedIds)
+    {
+        var idToIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < orderedIds.Count; i++)
+        {
+            idToIndex[orderedIds[i]] = i;
+        }
+
+        return guilds
+            .OrderBy(g => idToIndex.TryGetValue(g.Id, out var idx) ? idx : int.MaxValue)
+            .ThenBy(g => g.Name)
+            .ToList();
+    }
+
+    private void SyncGuildsCollection(List<DiscordGuild> sorted)
+    {
+        for (int targetIdx = 0; targetIdx < sorted.Count; targetIdx++)
+        {
+            var targetGuild = sorted[targetIdx];
+            var existingIdx = -1;
+            for (int i = 0; i < Guilds.Count; i++)
+            {
+                if (Guilds[i].Id == targetGuild.Id)
+                {
+                    existingIdx = i;
+                    break;
+                }
+            }
+
+            if (existingIdx >= 0)
+            {
+                Guilds[existingIdx] = targetGuild;
+                if (existingIdx != targetIdx)
+                {
+                    Guilds.Move(existingIdx, targetIdx);
+                }
+            }
+            else
+            {
+                Guilds.Insert(targetIdx, targetGuild);
+            }
+        }
+
+        for (int i = Guilds.Count - 1; i >= sorted.Count; i--)
+        {
+            Guilds.RemoveAt(i);
         }
     }
 

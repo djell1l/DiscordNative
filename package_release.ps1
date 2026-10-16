@@ -20,16 +20,16 @@ Get-ChildItem -Path $installerReleaseDir -File | Where-Object { $_.Name -ne "Dis
 }
 
 Write-Host "Packaging Portable Zip..."
-if (Test-Path "dist\Diswin-v0.3.2-win-x64-portable.zip") {
-    Remove-Item -Force "dist\Diswin-v0.3.2-win-x64-portable.zip"
+if (Test-Path "dist\Diswin-v0.3.3-win-x64-portable.zip") {
+    Remove-Item -Force "dist\Diswin-v0.3.3-win-x64-portable.zip"
 }
-Compress-Archive -Path "dist\InstallerBundle\Payload\*" -DestinationPath "dist\Diswin-v0.3.2-win-x64-portable.zip"
+Compress-Archive -Path "dist\InstallerBundle\Payload\*" -DestinationPath "dist\Diswin-v0.3.3-win-x64-portable.zip"
 
 Write-Host "Packaging Setup Zip..."
-if (Test-Path "dist\Diswin-Setup-v0.3.2-win-x64.zip") {
-    Remove-Item -Force "dist\Diswin-Setup-v0.3.2-win-x64.zip"
+if (Test-Path "dist\Diswin-Setup-v0.3.3-win-x64.zip") {
+    Remove-Item -Force "dist\Diswin-Setup-v0.3.3-win-x64.zip"
 }
-Compress-Archive -Path "dist\InstallerBundle\*" -DestinationPath "dist\Diswin-Setup-v0.3.2-win-x64.zip"
+Compress-Archive -Path "dist\InstallerBundle\*" -DestinationPath "dist\Diswin-Setup-v0.3.3-win-x64.zip"
 
 Write-Host "Done! Artifacts:"
 Get-ChildItem "dist\*.zip" | Select-Object Name, Length, LastWriteTime

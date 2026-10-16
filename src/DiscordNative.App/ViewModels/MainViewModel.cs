@@ -448,14 +448,7 @@ public sealed partial class MainViewModel : ObservableObject
     public async Task JoinServerByInviteAsync(string inviteCodeOrUrl)
     {
         await _client.Rest.JoinInviteAsync(inviteCodeOrUrl);
-        var guilds = await _client.Rest.GetGuildsAsync();
-        foreach (var g in guilds)
-        {
-            if (Guilds.All(existing => existing.Id != g.Id))
-            {
-                Guilds.Add(g);
-            }
-        }
+        await _client.RefreshGuildsAsync();
     }
 
     public async Task LeaveGuildAsync(DiscordGuild guild)
