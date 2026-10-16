@@ -16,6 +16,11 @@ public sealed class AppSettings
     public double BackgroundOpacity { get; set; } = 0.35;
     public double BackgroundBlurRadius { get; set; } = 12.0;
     public bool CompactMode { get; set; } = false;
+    public bool BubbleMessageStyle { get; set; } = false;
+    public double InterfaceScale { get; set; } = 1.0;
+    public bool AnonymizeUploads { get; set; } = false;
+    public bool ConvertLongMessagesToFile { get; set; } = true;
+    public string UpdateChannel { get; set; } = "Stable"; // Stable | Experimental
     public bool ShowNotifications { get; set; } = true;
     public bool StartMinimized { get; set; } = false;
 }
@@ -76,7 +81,7 @@ public sealed class SettingsService
         Vault.Add(new PasswordCredential(VaultResource, VaultUserName, token));
     }
 
-    private static string GetSettingsPath()
+    public static string GetSettingsPath()
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var appFolder = System.IO.Path.Combine(localAppData, "DiscordNative");
@@ -97,7 +102,7 @@ public sealed class SettingsService
         }
         catch { }
         
-        return new AppSettings { ThemeMode = "Light" }; // Force Light mode to showcase the fix
+        return new AppSettings { ThemeMode = "Light" };
     }
 
     public void Save()
@@ -110,6 +115,24 @@ public sealed class SettingsService
             SettingsChanged?.Invoke();
         }
         catch { }
+    }
+
+    public void ExportSettings(string targetFilePath)
+    {
+        var json = JsonSerializer.Serialize(Current, JsonOptions);
+        System.IO.File.WriteAllText(targetFilePath, json);
+    }
+
+    public void ImportSettings(string sourceFilePath)
+    {
+        var json = System.IO.File.ReadAllText(sourceFilePath);
+        var imported = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
+        if (imported is not null)
+        {
+            imported.SavedToken = Current.SavedToken;
+            Current = imported;
+            Save();
+        }
     }
 
     public async Task<string> ImportBackgroundImageAsync(StorageFile sourceFile)
@@ -140,3 +163,4 @@ public sealed class SettingsService
         catch { /* déjà absent */ }
     }
 }
+

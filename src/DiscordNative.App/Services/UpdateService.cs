@@ -56,8 +56,9 @@ public static class UpdateService
             var releases = JsonSerializer.Deserialize<List<UpdateInfo>>(json);
             if (releases is null || releases.Count == 0) return null;
 
-            var latest = releases[0];
-            var currentVersion = "v0.2.1";
+            var includeExp = string.Equals(App.Settings.Current.UpdateChannel, "Experimental", StringComparison.OrdinalIgnoreCase);
+            var latest = releases.FirstOrDefault(r => includeExp || !r.Prerelease) ?? releases[0];
+            var currentVersion = "v0.3.0";
 
             if (latest.TagName != currentVersion && !latest.TagName.Equals(currentVersion + "-exp", StringComparison.OrdinalIgnoreCase))
             {

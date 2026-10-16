@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using DiscordNative.App.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,7 +17,7 @@ public sealed partial class SettingsWindow : Window
     public SettingsWindow()
     {
         InitializeComponent();
-        Title = "DiscordNative — Paramètres";
+        Title = "Diswin — Paramètres";
         ExtendsContentIntoTitleBar = true;
         SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
         SetTitleBar(AppTitleBar);
@@ -33,7 +34,15 @@ public sealed partial class SettingsWindow : Window
             .OfType<ComboBoxItem>()
             .FirstOrDefault(i => (string)i.Tag == current.ThemeMode) ?? ThemeCombo.Items[0];
 
+        UpdateChannelCombo.SelectedItem = UpdateChannelCombo.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(i => (string)i.Tag == current.UpdateChannel) ?? UpdateChannelCombo.Items[0];
+
+        ScaleSlider.Value = Math.Clamp(current.InterfaceScale, 0.85, 1.25);
+        BubbleStyleToggle.IsOn = current.BubbleMessageStyle;
         CompactModeToggle.IsOn = current.CompactMode;
+        AnonymizeUploadsToggle.IsOn = current.AnonymizeUploads;
+        ConvertLongMessagesToggle.IsOn = current.ConvertLongMessagesToFile;
         OpacitySlider.Value = current.BackgroundOpacity;
         BlurSlider.Value = current.BackgroundBlurRadius;
 
@@ -65,14 +74,96 @@ public sealed partial class SettingsWindow : Window
         BackgroundPreview.Source = null;
     }
 
-    private void OnOpacityChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    private void OnScaleChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_isInitializing) return;
+        _settings.Current.InterfaceScale = e.NewValue;
+        _settings.Save();
+    }
+
+    private void OnBubbleStyleToggled(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializing) return;
+        _settings.Current.BubbleMessageStyle = BubbleStyleToggle.IsOn;
+        _settings.Save();
+    }
+
+    private void OnAnonymizeUploadsToggled(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializing) return;
+        _settings.Current.AnonymizeUploads = AnonymizeUploadsToggle.IsOn;
+        _settings.Save();
+    }
+
+    private void OnConvertLongMessagesToggled(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializing) return;
+        _settings.Current.ConvertLongMessagesToFile = ConvertLongMessagesToggle.IsOn;
+        _settings.Save();
+    }
+
+    private void OnUpdateChannelChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isInitializing) return;
+        if (UpdateChannelCombo.SelectedItem is ComboBoxItem item)
+        {
+            _settings.Current.UpdateChannel = (string)item.Tag;
+            _settings.Save();
+        }
+    }
+
+    private async void OnExportSettingsClicked(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileSavePicker();
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+        picker.SuggestedFileName = "diswin-settings";
+        picker.FileTypeChoices.Add("JSON Settings", new List<string> { ".json" });
+
+        var file = await picker.PickSaveFileAsync();
+        if (file is not null)
+        {
+            _settings.ExportSettings(file.Path);
+        }
+    }
+
+    private async void OnImportSettingsClicked(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker();
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+        picker.FileTypeFilter.Add(".json");
+
+        var file = await picker.PickSingleFileAsync();
+        if (file is not null)
+        {
+            _settings.ImportSettings(file.Path);
+            _isInitializing = true;
+            LoadCurrentSettings();
+            _isInitializing = false;
+        }
+    }
+
+    private void OnOpenLogsClicked(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DiscordNative_crash.log");
+            if (!System.IO.File.Exists(logPath))
+            {
+                System.IO.File.WriteAllText(logPath, $"[{DateTime.Now}] Diswin Diagnostics Log Initialized.\n");
+            }
+            Process.Start(new ProcessStartInfo("notepad.exe", logPath) { UseShellExecute = true });
+        }
+        catch { }
+    }
+
+    private void OnOpacityChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
         if (_isInitializing) return;
         _settings.Current.BackgroundOpacity = e.NewValue;
         _settings.Save();
     }
 
-    private void OnBlurChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    private void OnBlurChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
         if (_isInitializing) return;
         _settings.Current.BackgroundBlurRadius = e.NewValue;

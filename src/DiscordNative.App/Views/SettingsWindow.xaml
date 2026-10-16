@@ -12,58 +12,117 @@
         <Grid Grid.Row="0" x:Name="AppTitleBar" Background="Transparent" />
 
         <ScrollViewer Grid.Row="1" Padding="24">
-            <StackPanel Spacing="24" MaxWidth="640">
+            <StackPanel Spacing="24" MaxWidth="680">
 
-                <TextBlock Text="Paramètres" FontSize="28" FontWeight="SemiBold" />
+                <TextBlock Text="Paramètres — Diswin" FontSize="28" FontWeight="SemiBold" />
 
-                <!-- Apparence -->
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Apparence" FontSize="18" FontWeight="SemiBold" />
+                <!-- Apparence & Interface -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="12" Padding="18">
+                    <StackPanel Spacing="14">
+                        <TextBlock Text="Apparence &amp; Interface" FontSize="18" FontWeight="SemiBold" />
 
-                    <ComboBox x:Name="ThemeCombo" Header="Thème"
-                              SelectionChanged="OnThemeChanged" HorizontalAlignment="Stretch">
-                        <ComboBoxItem Content="Système" Tag="Default" />
-                        <ComboBoxItem Content="Clair" Tag="Light" />
-                        <ComboBoxItem Content="Sombre" Tag="Dark" />
-                    </ComboBox>
+                        <ComboBox x:Name="ThemeCombo" Header="Thème de l'application"
+                                  SelectionChanged="OnThemeChanged" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="Système" Tag="Default" />
+                            <ComboBoxItem Content="Clair" Tag="Light" />
+                            <ComboBoxItem Content="Sombre" Tag="Dark" />
+                        </ComboBox>
 
-                    <ToggleSwitch x:Name="CompactModeToggle" Header="Mode compact"
-                                  Toggled="OnCompactModeToggled" />
-                </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Échelle de l'interface (85% — 125%)" />
+                            <Slider x:Name="ScaleSlider" Minimum="0.85" Maximum="1.25" StepFrequency="0.05"
+                                    ValueChanged="OnScaleChanged" />
+                        </StackPanel>
+
+                        <ToggleSwitch x:Name="BubbleStyleToggle" Header="Style de messages en bulles (façon SakuraCord)"
+                                      Toggled="OnBubbleStyleToggled" />
+
+                        <ToggleSwitch x:Name="CompactModeToggle" Header="Mode compact"
+                                      Toggled="OnCompactModeToggled" />
+                    </StackPanel>
+                </Border>
 
                 <!-- Fond d'écran personnalisé, façon Files -->
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Fond d'écran personnalisé" FontSize="18" FontWeight="SemiBold" />
-                    <TextBlock Text="Choisissez une image qui s'affichera derrière l'interface, comme dans Files."
-                               Opacity="0.7" TextWrapping="Wrap" />
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="12" Padding="18">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Fond d'écran personnalisé" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Choisissez une image qui s'affichera derrière l'interface WinUI 3, comme dans Files."
+                                   Opacity="0.7" TextWrapping="Wrap" />
 
-                    <Border Height="160" CornerRadius="8" Background="{ThemeResource ControlFillColorSecondaryBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                        <Image x:Name="BackgroundPreview" Stretch="UniformToFill" />
-                    </Border>
+                        <Border Height="160" CornerRadius="8" Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                            <Image x:Name="BackgroundPreview" Stretch="UniformToFill" />
+                        </Border>
 
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Content="Choisir une image..." Click="OnChooseBackgroundClicked" />
-                        <Button Content="Réinitialiser" Click="OnResetBackgroundClicked" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Choisir une image..." Click="OnChooseBackgroundClicked" />
+                            <Button Content="Réinitialiser" Click="OnResetBackgroundClicked" />
+                        </StackPanel>
+
+                        <TextBlock Text="Opacité du voile" />
+                        <Slider x:Name="OpacitySlider" Minimum="0" Maximum="1" StepFrequency="0.05"
+                                ValueChanged="OnOpacityChanged" />
+
+                        <TextBlock Text="Flou" />
+                        <Slider x:Name="BlurSlider" Minimum="0" Maximum="40" StepFrequency="1"
+                                ValueChanged="OnBlurChanged" />
                     </StackPanel>
+                </Border>
 
-                    <TextBlock Text="Opacité du voile" />
-                    <Slider x:Name="OpacitySlider" Minimum="0" Maximum="1" StepFrequency="0.05"
-                            ValueChanged="OnOpacityChanged" />
+                <!-- Messagerie & Confidentialité -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="12" Padding="18">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Messagerie &amp; Confidentialité" FontSize="18" FontWeight="SemiBold" />
 
-                    <TextBlock Text="Flou" />
-                    <Slider x:Name="BlurSlider" Minimum="0" Maximum="40" StepFrequency="1"
-                            ValueChanged="OnBlurChanged" />
-                </StackPanel>
+                        <ToggleSwitch x:Name="AnonymizeUploadsToggle"
+                                      Header="Anonymiser le nom des fichiers et images envoyés"
+                                      Toggled="OnAnonymizeUploadsToggled" />
+
+                        <ToggleSwitch x:Name="ConvertLongMessagesToggle"
+                                      Header="Convertir automatiquement les messages &gt; 4000 caractères en fichier message.txt"
+                                      Toggled="OnConvertLongMessagesToggled" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Mises à jour, Sauvegarde & Diagnostics -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="12" Padding="18">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Mises à jour &amp; Configuration" FontSize="18" FontWeight="SemiBold" />
+
+                        <ComboBox x:Name="UpdateChannelCombo" Header="Canal de mise à jour"
+                                  SelectionChanged="OnUpdateChannelChanged" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="Stable (Recommandé)" Tag="Stable" />
+                            <ComboBoxItem Content="Expérimental (Préversions)" Tag="Experimental" />
+                        </ComboBox>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Exporter les paramètres..." Click="OnExportSettingsClicked" />
+                            <Button Content="Importer des paramètres..." Click="OnImportSettingsClicked" />
+                            <Button Content="Ouvrir les journaux" Click="OnOpenLogsClicked" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
 
                 <!-- Compte -->
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Compte" FontSize="18" FontWeight="SemiBold" />
-                    <Button Content="Se déconnecter" Background="{ThemeResource SystemFillColorCriticalBrush}"
-                            Click="OnLogoutClicked" />
-                </StackPanel>
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="12" Padding="18">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Compte" FontSize="18" FontWeight="SemiBold" />
+                        <Button Content="Se déconnecter" Background="{ThemeResource SystemFillColorCriticalBrush}"
+                                Foreground="White" Click="OnLogoutClicked" />
+                    </StackPanel>
+                </Border>
 
-                <TextBlock Text="Client non officiel — non affilié à Discord Inc." Opacity="0.5" FontSize="11" />
+                <TextBlock Text="Diswin v0.3.0 — Client WinUI 3 natif non officiel, non affilié à Discord Inc." Opacity="0.5" FontSize="11" />
 
             </StackPanel>
         </ScrollViewer>

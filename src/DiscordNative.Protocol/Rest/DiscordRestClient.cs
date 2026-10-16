@@ -59,12 +59,15 @@ public sealed class DiscordRestClient : IDisposable
         return await _http.GetFromJsonAsync<List<DiscordMessage>>(url, ct) ?? new();
     }
 
-    public async Task<DiscordMessage> SendMessageAsync(string channelId, string content, string? nonce = null, CancellationToken ct = default)
+    public async Task<DiscordMessage> SendMessageAsync(string channelId, string content, string? replyToMessageId = null, string? nonce = null, CancellationToken ct = default)
     {
         var payload = new SendMessageRequest
         {
             Content = content,
             Nonce = nonce ?? Guid.NewGuid().ToString("N"),
+            MessageReference = string.IsNullOrWhiteSpace(replyToMessageId)
+                ? null
+                : new MessageReferencePayload { ChannelId = channelId, MessageId = replyToMessageId }
         };
         var response = await _http.PostAsJsonAsync($"{ApiBase}/channels/{channelId}/messages", payload, ct);
         response.EnsureSuccessStatusCode();
@@ -95,17 +98,26 @@ public sealed class DiscordRestClient : IDisposable
                ?? throw new InvalidOperationException("Réponse d'édition illisible.");
     }
 
-    public async Task<DiscordMessage> SendFileAsync(string channelId, string filePath, string? content = null, CancellationToken ct = default)
+    public async Task<DiscordMessage> SendFileAsync(string channelId, string filePath, string? content = null, bool anonymizeFilename = false, CancellationToken ct = default)
+    {
+        var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath, ct);
+        var ext = System.IO.Path.GetExtension(filePath);
+        var fileName = anonymizeFilename
+            ? $"upload_{Guid.NewGuid().ToString("N")[..8]}{ext}"
+            : System.IO.Path.GetFileName(filePath);
+        return await SendBytesAsync(channelId, fileBytes, fileName, content, ct);
+    }
+
+    public async Task<DiscordMessage> SendBytesAsync(string channelId, byte[] fileBytes, string fileName, string? content = null, CancellationToken ct = default)
     {
         using var form = new MultipartFormDataContent();
         if (!string.IsNullOrEmpty(content))
         {
             form.Add(new StringContent(content), "content");
         }
-        var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath, ct);
         var fileContent = new ByteArrayContent(fileBytes);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        form.Add(fileContent, "file", System.IO.Path.GetFileName(filePath));
+        form.Add(fileContent, "file", fileName);
 
         var response = await _http.PostAsync($"{ApiBase}/channels/{channelId}/messages", form, ct);
         response.EnsureSuccessStatusCode();
@@ -119,16 +131,98 @@ public sealed class DiscordRestClient : IDisposable
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task<List<DiscordMessage>> GetPinnedMessagesAsync(string channelId, CancellationToken ct = default) =>
+        await _http.GetFromJsonAsync<List<DiscordMessage>>($"{ApiBase}/channels/{channelId}/pins", ct) ?? new();
+
+    public async Task PinMessageAsync(string channelId, string messageId, CancellationToken ct = default)
+    {
+        var response = await _http.PutAsync($"{ApiBase}/channels/{channelId}/pins/{messageId}", content: null, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UnpinMessageAsync(string channelId, string messageId, CancellationToken ct = default)
+    {
+        var response = await _http.DeleteAsync($"{ApiBase}/channels/{channelId}/pins/{messageId}", ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<DiscordMessage>> GetMentionsAsync(int limit = 25, CancellationToken ct = default) =>
+        await _http.GetFromJsonAsync<List<DiscordMessage>>($"{ApiBase}/users/@me/mentions?limit={limit}&roles=true&everyone=true", ct) ?? new();
+
+    public async Task<DiscordChannel?> CreateDmAsync(string recipientUserId, CancellationToken ct = default)
+    {
+        var response = await _http.PostAsJsonAsync($"{ApiBase}/users/@me/channels", new { recipient_id = recipientUserId }, ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<DiscordChannel>(cancellationToken: ct);
+    }
+
+    public async Task SendFriendRequestAsync(string username, CancellationToken ct = default)
+    {
+        var response = await _http.PostAsJsonAsync($"{ApiBase}/users/@me/relationships", new { username }, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task PutRelationshipAsync(string userId, int type = 1, CancellationToken ct = default)
+    {
+        var response = await _http.PutAsJsonAsync($"{ApiBase}/users/@me/relationships/{userId}", new { type }, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task RemoveRelationshipAsync(string userId, CancellationToken ct = default)
+    {
+        var response = await _http.DeleteAsync($"{ApiBase}/users/@me/relationships/{userId}", ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task JoinInviteAsync(string inviteCodeOrUrl, CancellationToken ct = default)
+    {
+        var code = ExtractInviteCode(inviteCodeOrUrl);
+        var response = await _http.PostAsJsonAsync($"{ApiBase}/invites/{code}", new { }, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<string> CreateChannelInviteAsync(string channelId, CancellationToken ct = default)
+    {
+        var response = await _http.PostAsJsonAsync($"{ApiBase}/channels/{channelId}/invites", new { max_age = 86400, max_uses = 0 }, ct);
+        response.EnsureSuccessStatusCode();
+        using var doc = await System.Text.Json.JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+        var code = doc.RootElement.TryGetProperty("code", out var c) ? c.GetString() : null;
+        return string.IsNullOrEmpty(code) ? string.Empty : $"https://discord.gg/{code}";
+    }
+
+    public async Task LeaveGuildAsync(string guildId, CancellationToken ct = default)
+    {
+        var response = await _http.DeleteAsync($"{ApiBase}/users/@me/guilds/{guildId}", ct);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task TriggerTypingAsync(string channelId, CancellationToken ct = default) =>
         await _http.PostAsync($"{ApiBase}/channels/{channelId}/typing", content: null, ct);
 
     public void Dispose() => _http.Dispose();
+
+    private static string ExtractInviteCode(string raw)
+    {
+        var trimmed = raw.Trim().TrimEnd('/');
+        var lastSlash = trimmed.LastIndexOf('/');
+        return lastSlash >= 0 ? trimmed[(lastSlash + 1)..] : trimmed;
+    }
 
     private sealed class SendMessageRequest
     {
         [JsonPropertyName("content")] public string Content { get; set; } = string.Empty;
         [JsonPropertyName("nonce")] public string Nonce { get; set; } = string.Empty;
         [JsonPropertyName("tts")] public bool Tts { get; set; } = false;
+        [JsonPropertyName("message_reference")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public MessageReferencePayload? MessageReference { get; set; }
+    }
+
+    private sealed class MessageReferencePayload
+    {
+        [JsonPropertyName("channel_id")] public string ChannelId { get; set; } = string.Empty;
+        [JsonPropertyName("message_id")] public string MessageId { get; set; } = string.Empty;
     }
 }
+
 

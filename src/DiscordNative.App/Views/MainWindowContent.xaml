@@ -5,7 +5,7 @@
     xmlns:models="using:DiscordNative.Protocol.Models"
     xmlns:controls="using:DiscordNative.App.Controls">
 
-    <Grid>
+    <Grid x:Name="RootLayoutGrid">
         <controls:BackgroundImageHost x:Name="BackgroundHost" />
 
         <!-- Splash Screen animé au démarrage façon Discord -->
@@ -60,6 +60,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <Button Grid.Row="0" Margin="12,12,12,4" Width="48" Height="48" CornerRadius="16" Padding="0"
@@ -102,6 +103,10 @@
                                             <MenuFlyoutItem Text="Copier l'identifiant" Click="OnCopyGuildIdClicked">
                                                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
                                             </MenuFlyoutItem>
+                                            <MenuFlyoutSeparator />
+                                            <MenuFlyoutItem Text="Quitter le serveur" Click="OnLeaveGuildClicked" Foreground="#FF453A">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE89B;" Foreground="#FF453A" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
                                         </MenuFlyout>
                                     </Grid.ContextFlyout>
                                     <Rectangle Fill="{ThemeResource ControlFillColorSecondaryBrush}" RadiusX="16" RadiusY="16" />
@@ -118,7 +123,13 @@
                         </ListView.ItemTemplate>
                     </ListView>
 
-                    <Button Grid.Row="2" Margin="12" Width="48" Height="48" CornerRadius="16"
+                    <!-- Bouton Rejoindre un serveur par invitation (+) -->
+                    <Button Grid.Row="2" Margin="12,4,12,0" Width="48" Height="48" CornerRadius="16"
+                            Click="OnJoinServerClicked" ToolTipService.ToolTip="Rejoindre un serveur (Invitation)">
+                        <FontIcon Glyph="&#xE710;" />
+                    </Button>
+
+                    <Button Grid.Row="3" Margin="12" Width="48" Height="48" CornerRadius="16"
                             Click="OnSettingsClicked" ToolTipService.ToolTip="Paramètres">
                         <FontIcon Glyph="&#xE713;" />
                     </Button>
@@ -160,6 +171,10 @@
                                     <StackPanel Orientation="Horizontal" Spacing="8" Padding="8,6">
                                         <StackPanel.ContextFlyout>
                                             <MenuFlyout>
+                                                <MenuFlyoutItem Text="Créer une invitation" Click="OnCreateChannelInviteFromMenuClicked">
+                                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE72D;" /></MenuFlyoutItem.Icon>
+                                                </MenuFlyoutItem>
+                                                <MenuFlyoutSeparator />
                                                 <MenuFlyoutItem Text="Copier le nom" Click="OnCopyChannelNameClicked">
                                                     <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
                                                 </MenuFlyoutItem>
@@ -178,7 +193,7 @@
 
                         <ScrollViewer Visibility="{x:Bind ViewModel.ShowingFriendsView, Mode=OneWay}">
                             <StackPanel>
-                                <TextBlock Text="Messages privés" Margin="12,12,12,4" Opacity="0.6" FontSize="12" FontWeight="SemiBold" />
+                                <TextBlock Text="Messages privés" Margin="12,8,12,4" Opacity="0.6" FontSize="12" FontWeight="SemiBold" />
                                 <ListView x:Name="PrivateChannelList"
                                           ItemsSource="{x:Bind ViewModel.PrivateChannels, Mode=OneWay}"
                                           SelectionMode="Single"
@@ -214,9 +229,25 @@
                                     </ListView.ItemTemplate>
                                 </ListView>
 
-                                <TextBlock Text="Amis" Margin="12,16,12,4" Opacity="0.6" FontSize="12" FontWeight="SemiBold" />
+                                <!-- Section Amis avec filtres et Ajout d'ami façon SakuraCord -->
+                                <Grid Margin="12,16,12,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Amis" Opacity="0.6" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Content="+ Ajouter" FontSize="11" Padding="8,3" CornerRadius="6"
+                                            Style="{StaticResource AccentButtonStyle}" Click="OnAddFriendClicked" />
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal" Spacing="4" Margin="12,0,12,6">
+                                    <Button Content="Tous" FontSize="11" Padding="8,3" CornerRadius="6" Click="OnFilterAllFriendsClicked" />
+                                    <Button Content="En attente" FontSize="11" Padding="8,3" CornerRadius="6" Click="OnFilterPendingFriendsClicked" />
+                                    <Button Content="Bloqués" FontSize="11" Padding="8,3" CornerRadius="6" Click="OnFilterBlockedFriendsClicked" />
+                                </StackPanel>
+
                                 <ListView x:Name="FriendList"
-                                          ItemsSource="{x:Bind ViewModel.Friends, Mode=OneWay}"
+                                          ItemsSource="{x:Bind ViewModel.FilteredFriends, Mode=OneWay}"
                                           SelectionMode="None"
                                           Padding="8,0">
                                     <ListView.ItemTemplate>
@@ -224,14 +255,26 @@
                                             <StackPanel Orientation="Horizontal" Spacing="8" Padding="8,6">
                                                 <StackPanel.ContextFlyout>
                                                     <MenuFlyout>
-                                                        <MenuFlyoutItem Text="Voir le profil" Click="OnFriendProfileClicked">
-                                                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE77B;" /></MenuFlyoutItem.Icon>
+                                                        <MenuFlyoutItem Text="Envoyer un message privé" Click="OnFriendProfileClicked">
+                                                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8BD;" /></MenuFlyoutItem.Icon>
                                                         </MenuFlyoutItem>
+                                                        <MenuFlyoutItem Text="Accepter la demande" Click="OnAcceptFriendClicked"
+                                                                        Visibility="{x:Bind IsPendingIncoming, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8FB;" /></MenuFlyoutItem.Icon>
+                                                        </MenuFlyoutItem>
+                                                        <MenuFlyoutSeparator />
                                                         <MenuFlyoutItem Text="Copier le pseudo" Click="OnCopyFriendUsernameClicked">
                                                             <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
                                                         </MenuFlyoutItem>
                                                         <MenuFlyoutItem Text="Copier l'identifiant" Click="OnCopyFriendIdClicked">
                                                             <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
+                                                        </MenuFlyoutItem>
+                                                        <MenuFlyoutSeparator />
+                                                        <MenuFlyoutItem Text="Bloquer l'utilisateur" Click="OnBlockFriendClicked">
+                                                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8F8;" /></MenuFlyoutItem.Icon>
+                                                        </MenuFlyoutItem>
+                                                        <MenuFlyoutItem Text="Retirer / Refuser" Click="OnRemoveFriendClicked" Foreground="#FF453A">
+                                                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" Foreground="#FF453A" /></MenuFlyoutItem.Icon>
                                                         </MenuFlyoutItem>
                                                     </MenuFlyout>
                                                 </StackPanel.ContextFlyout>
@@ -243,7 +286,10 @@
                                                         </Ellipse.Fill>
                                                     </Ellipse>
                                                 </Grid>
-                                                <TextBlock Text="{x:Bind User.DisplayName}" VerticalAlignment="Center" />
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{x:Bind User.DisplayName}" FontSize="13" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{x:Bind SubtitleText}" FontSize="10" Opacity="0.6" />
+                                                </StackPanel>
                                             </StackPanel>
                                         </DataTemplate>
                                     </ListView.ItemTemplate>
@@ -346,7 +392,6 @@
                                                 <ImageBrush ImageSource="{x:Bind ViewModel.CurrentUserAvatarUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
                                             </Ellipse.Fill>
                                         </Ellipse>
-                                        <!-- Pastille d'état Discord -->
                                         <Ellipse Width="10" Height="10" Fill="{x:Bind ViewModel.StatusDotBrush, Mode=OneWay}"
                                                  Stroke="{ThemeResource ApplicationPageBackgroundThemeBrush}" StrokeThickness="2"
                                                  HorizontalAlignment="Right" VerticalAlignment="Bottom" />
@@ -375,26 +420,129 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- 2. Zone principale : Chat OU Vue Vocale interactive -->
+                <!-- 2. Zone principale : En-tête + Chat/Vocal + Liste des membres -->
                 <Grid Grid.Column="2">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="48" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                    <!-- En-tête de salon -->
-                    <Border Grid.Row="0" Background="Transparent"
+                    <!-- En-tête de salon avec Actions (Inviter, Épinglés, Mentions, Membres) -->
+                    <Border Grid.Row="0" Grid.ColumnSpan="2" Background="Transparent"
                             BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="16,0">
-                            <FontIcon Glyph="&#xE803;" FontSize="16" Opacity="0.6" Visibility="{x:Bind ViewModel.VoiceViewVisibility, Mode=OneWay}" />
-                            <TextBlock Text="{x:Bind ViewModel.SelectedChannelName, Mode=OneWay}"
-                                       FontWeight="SemiBold" VerticalAlignment="Center" />
-                        </StackPanel>
+                        <Grid Margin="16,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                <FontIcon Glyph="&#xE803;" FontSize="16" Opacity="0.6" Visibility="{x:Bind ViewModel.VoiceViewVisibility, Mode=OneWay}" />
+                                <TextBlock Text="{x:Bind ViewModel.SelectedChannelName, Mode=OneWay}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock Text="|" Opacity="0.3" VerticalAlignment="Center"
+                                           Visibility="{x:Bind ViewModel.TopicVisibility, Mode=OneWay}" />
+                                <TextBlock Text="{x:Bind ViewModel.SelectedChannelTopic, Mode=OneWay}"
+                                           FontSize="12" Opacity="0.6" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="360"
+                                           Visibility="{x:Bind ViewModel.TopicVisibility, Mode=OneWay}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <!-- Créer une invitation -->
+                                <Button Width="34" Height="34" Padding="0" CornerRadius="8" Background="Transparent" BorderThickness="0"
+                                        Click="OnCreateChannelInviteClicked" ToolTipService.ToolTip="Créer un lien d'invitation">
+                                    <FontIcon Glyph="&#xE72D;" FontSize="15" />
+                                </Button>
+
+                                <!-- Messages Épinglés -->
+                                <Button Width="34" Height="34" Padding="0" CornerRadius="8" Background="Transparent" BorderThickness="0"
+                                        Click="OnOpenPinsFlyoutClicked" ToolTipService.ToolTip="Messages épinglés">
+                                    <FontIcon Glyph="&#xE718;" FontSize="15" />
+                                    <Button.Flyout>
+                                        <Flyout Placement="BottomEdgeAlignedRight">
+                                            <StackPanel Width="360" Spacing="10">
+                                                <TextBlock Text="📌 Messages épinglés" FontWeight="Bold" FontSize="15" />
+                                                <ScrollViewer MaxHeight="380">
+                                                    <ItemsControl ItemsSource="{x:Bind ViewModel.PinnedMessages, Mode=OneWay}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="models:DiscordMessage">
+                                                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                                        BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                                                                    <StackPanel Spacing="4">
+                                                                        <Grid>
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="*" />
+                                                                                <ColumnDefinition Width="Auto" />
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                                <TextBlock Text="{x:Bind Author.DisplayName}" FontWeight="SemiBold" FontSize="13" />
+                                                                                <TextBlock Text="{x:Bind TimeText}" FontSize="11" Opacity="0.5" VerticalAlignment="Center" />
+                                                                            </StackPanel>
+                                                                            <Button Grid.Column="1" Content="Désépingler" FontSize="10" Padding="6,2"
+                                                                                    Click="OnUnpinFromFlyoutClicked" />
+                                                                        </Grid>
+                                                                        <TextBlock Text="{x:Bind Content}" TextWrapping="Wrap" FontSize="13" Opacity="0.9" />
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+                                            </StackPanel>
+                                        </Flyout>
+                                    </Button.Flyout>
+                                </Button>
+
+                                <!-- Boîte de réception / Mentions (@) -->
+                                <Button Width="34" Height="34" Padding="0" CornerRadius="8" Background="Transparent" BorderThickness="0"
+                                        Click="OnOpenMentionsFlyoutClicked" ToolTipService.ToolTip="Mentions récentes (@)">
+                                    <FontIcon Glyph="&#xE715;" FontSize="15" />
+                                    <Button.Flyout>
+                                        <Flyout Placement="BottomEdgeAlignedRight">
+                                            <StackPanel Width="360" Spacing="10">
+                                                <TextBlock Text="🔔 Mentions récentes" FontWeight="Bold" FontSize="15" />
+                                                <ScrollViewer MaxHeight="380">
+                                                    <ItemsControl ItemsSource="{x:Bind ViewModel.RecentMentions, Mode=OneWay}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="models:DiscordMessage">
+                                                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                                        BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                                                                    <StackPanel Spacing="4">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                            <TextBlock Text="{x:Bind Author.DisplayName}" FontWeight="SemiBold" FontSize="13" />
+                                                                            <TextBlock Text="{x:Bind TimeText}" FontSize="11" Opacity="0.5" VerticalAlignment="Center" />
+                                                                        </StackPanel>
+                                                                        <TextBlock Text="{x:Bind Content}" TextWrapping="Wrap" FontSize="13" Opacity="0.9" />
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+                                            </StackPanel>
+                                        </Flyout>
+                                    </Button.Flyout>
+                                </Button>
+
+                                <!-- Afficher / Masquer la liste des membres -->
+                                <Button Width="34" Height="34" Padding="0" CornerRadius="8" Background="Transparent" BorderThickness="0"
+                                        Click="OnToggleMemberListClicked" ToolTipService.ToolTip="Afficher / Masquer les participants">
+                                    <FontIcon Glyph="&#xE716;" FontSize="15" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
                     </Border>
 
                     <!-- VUE VOCALE (Grille de participants comme le vrai Discord) -->
-                    <Grid Grid.Row="1" Visibility="{x:Bind ViewModel.VoiceViewVisibility, Mode=OneWay}" Padding="20">
+                    <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Visibility="{x:Bind ViewModel.VoiceViewVisibility, Mode=OneWay}" Padding="20">
                         <GridView ItemsSource="{x:Bind ViewModel.VoiceParticipants, Mode=OneWay}" SelectionMode="None">
                             <GridView.ItemTemplate>
                                 <DataTemplate x:DataType="models:DiscordUser">
@@ -420,8 +568,8 @@
                         </GridView>
                     </Grid>
 
-                    <!-- VUE TEXTUELLE (Messages classiques) -->
-                    <ListView Grid.Row="1" x:Name="MessageList"
+                    <!-- VUE TEXTUELLE (Messages complets : Réponses, Édition, Stickers, Fichiers, Sondages) -->
+                    <ListView Grid.Row="1" Grid.Column="0" x:Name="MessageList"
                               Visibility="{x:Bind ViewModel.TextViewVisibility, Mode=OneWay}"
                               ItemsSource="{x:Bind ViewModel.Messages, Mode=OneWay}"
                               Padding="16,8"
@@ -431,9 +579,22 @@
                                 <StackPanel Margin="0,2,0,6" Spacing="2">
                                     <StackPanel.ContextFlyout>
                                         <MenuFlyout>
+                                            <MenuFlyoutItem Text="Répondre" Click="OnReplyMessageClicked">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE97A;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Modifier le message" Click="OnEditMessageClicked">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE70F;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Épingler / Désépingler" Click="OnTogglePinMessageClicked">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE718;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
                                             <MenuFlyoutItem Text="Copier le message" Click="OnCopyMessageTextClicked">
                                                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
                                             </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Traduire le message" Click="OnTranslateMessageClicked">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE775;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutSeparator />
                                             <MenuFlyoutItem Text="Ajouter 👍" Click="OnQuickReactThumbsUpClicked" />
                                             <MenuFlyoutItem Text="Ajouter ❤️" Click="OnQuickReactHeartClicked" />
                                             <MenuFlyoutItem Text="Ajouter 😂" Click="OnQuickReactJoyClicked" />
@@ -448,7 +609,21 @@
                                             </MenuFlyoutItem>
                                         </MenuFlyout>
                                     </StackPanel.ContextFlyout>
-                                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,12,0,4"
+
+                                    <!-- En-tête de réponse (ReferencedMessage) façon Discord / SakuraCord -->
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="20,8,0,0"
+                                                Visibility="{x:Bind IsReply, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <FontIcon Glyph="&#xE97A;" FontSize="11" Opacity="0.6" />
+                                        <Ellipse Width="16" Height="16">
+                                            <Ellipse.Fill>
+                                                <ImageBrush ImageSource="{x:Bind ReplyAuthorAvatarUrl, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
+                                            </Ellipse.Fill>
+                                        </Ellipse>
+                                        <TextBlock Text="{x:Bind ReplyAuthorName}" FontSize="12" FontWeight="SemiBold" Opacity="0.85" />
+                                        <TextBlock Text="{x:Bind ReplyPreview}" FontSize="12" Opacity="0.65" TextTrimming="CharacterEllipsis" MaxWidth="420" />
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,4"
                                                 Visibility="{x:Bind ShowHeader, Converter={StaticResource BoolToVisibilityConverter}}">
 
                                         <!-- Bouton avatar avec Popout Profil ultra détaillé façon Discord -->
@@ -492,14 +667,16 @@
                                                                 </StackPanel>
                                                             </Border>
 
-                                                            <!-- Séparateur -->
                                                             <MenuFlyoutSeparator Margin="0,4" />
 
                                                             <TextBlock Text="À PROPOS DE MOI" FontSize="11" FontWeight="Bold" Opacity="0.6" />
                                                             <TextBlock Text="{x:Bind Author.AboutMe}" FontSize="13" TextWrapping="Wrap" Opacity="0.9" />
 
-                                                            <!-- Champ de message direct -->
-                                                            <TextBox PlaceholderText="Envoyer un message..." CornerRadius="8" Margin="0,6,0,0" />
+                                                            <!-- Champ de message direct actif (Entrée pour envoyer un MP) -->
+                                                            <TextBox PlaceholderText="Envoyer un message privé (Entrée)..."
+                                                                     Tag="{x:Bind Author}"
+                                                                     KeyDown="OnQuickProfileMessageKeyDown"
+                                                                     CornerRadius="8" Margin="0,6,0,0" />
                                                         </StackPanel>
                                                     </Grid>
                                                 </Flyout>
@@ -520,6 +697,8 @@
                                             <StackPanel Orientation="Horizontal" Spacing="8">
                                                 <TextBlock Text="{x:Bind Author.DisplayName}" FontWeight="SemiBold" FontSize="15" />
                                                 <TextBlock Text="{x:Bind ShortTime}" Opacity="0.5" FontSize="12" VerticalAlignment="Center" />
+                                                <TextBlock Text="{x:Bind EditedText}" Opacity="0.45" FontSize="11" VerticalAlignment="Center"
+                                                           Visibility="{x:Bind IsEdited, Converter={StaticResource BoolToVisibilityConverter}}" />
                                             </StackPanel>
                                         </StackPanel>
                                     </StackPanel>
@@ -532,7 +711,20 @@
 
                                     <!-- Texte du message -->
                                     <TextBlock Text="{x:Bind Content}" TextWrapping="Wrap" Margin="50,0,0,0"
-                                               Visibility="{x:Bind IsNormal, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                               IsTextSelectionEnabled="True"
+                                               Visibility="{x:Bind HasContent, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                    <!-- Stickers Discord -->
+                                    <ItemsControl ItemsSource="{x:Bind StickerItems}" Margin="50,4,0,0"
+                                                  Visibility="{x:Bind HasStickers, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="models:DiscordStickerItem">
+                                                <Image Source="{x:Bind Url, Converter={StaticResource StringToImageSourceConverter}}"
+                                                       Width="140" Height="140" HorizontalAlignment="Left" Stretch="Uniform"
+                                                       ToolTipService.ToolTip="{x:Bind Name}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
 
                                     <!-- Pièces jointes Images -->
                                     <ItemsControl ItemsSource="{x:Bind ImageAttachments}" Margin="50,4,0,0"
@@ -546,6 +738,47 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+
+                                    <!-- Pièces jointes Fichiers non-image (ex: message.txt, zip, pdf) -->
+                                    <ItemsControl ItemsSource="{x:Bind FileAttachments}" Margin="50,4,0,0"
+                                                  Visibility="{x:Bind HasFiles, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="models:DiscordAttachment">
+                                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                        BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,4" MaxWidth="360" HorizontalAlignment="Left">
+                                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                                        <FontIcon Glyph="&#xE8A5;" FontSize="20" Opacity="0.8" />
+                                                        <StackPanel VerticalAlignment="Center" Width="210">
+                                                            <TextBlock Text="{x:Bind Filename}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="{x:Bind SizeText}" FontSize="11" Opacity="0.6" />
+                                                        </StackPanel>
+                                                        <HyperlinkButton Content="Ouvrir" NavigateUri="{x:Bind Url}" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!-- Sondages natifs Discord (Polls) -->
+                                    <Border Margin="50,4,0,0" MaxWidth="380" HorizontalAlignment="Left"
+                                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                            BorderThickness="1" CornerRadius="10" Padding="12"
+                                            Visibility="{x:Bind HasPoll, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="{x:Bind Poll.QuestionText}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
+                                            <ItemsControl ItemsSource="{x:Bind Poll.Answers}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:DiscordPollAnswer">
+                                                        <Border Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="6" Padding="10,6" Margin="0,2">
+                                                            <TextBlock Text="{x:Bind DisplayText}" FontSize="13" />
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
 
                                     <!-- Embeds -->
                                     <ItemsControl ItemsSource="{x:Bind Embeds}" Margin="50,4,0,0"
@@ -592,31 +825,129 @@
                         </ListView.ItemTemplate>
                     </ListView>
 
-                    <!-- Barre de saisie de message (visible seulement en mode texte) -->
-                    <Grid Grid.Row="2" Visibility="{x:Bind ViewModel.TextViewVisibility, Mode=OneWay}" Padding="16,0,16,16" ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Button Grid.Column="0" Width="40" Height="40" CornerRadius="20" Padding="0"
-                                Background="{ThemeResource ControlFillColorDefaultBrush}" BorderThickness="0"
-                                Click="OnAttachFileClicked" ToolTipService.ToolTip="Joindre un fichier ou une image">
-                            <FontIcon Glyph="&#xE710;" FontSize="16" />
-                        </Button>
-                        <TextBox Grid.Column="1" x:Name="MessageInput"
-                                 PlaceholderText="Écrire un message..."
-                                 CornerRadius="10" BorderThickness="0"
-                                 Background="{ThemeResource ControlFillColorDefaultBrush}"
-                                 Padding="14,10"
-                                 KeyDown="OnMessageInputKeyDown" />
-                        <Button Grid.Column="2" Content="Envoyer" Click="OnSendClicked"
-                                CornerRadius="10"
-                                Style="{StaticResource AccentButtonStyle}" />
-                    </Grid>
+                    <!-- Panneau latéral droit : Liste des Participants / Membres -->
+                    <Border Grid.Row="1" Grid.RowSpan="2" Grid.Column="1" Width="210"
+                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1,0,0,0"
+                            Visibility="{x:Bind ViewModel.MemberListVisibility, Mode=OneWay}">
+                        <ScrollViewer Padding="10,12">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="PARTICIPANTS" FontSize="11" FontWeight="Bold" Opacity="0.6" Margin="6,0,0,4" />
+                                <ItemsControl ItemsSource="{x:Bind ViewModel.ChannelMembers, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:DiscordUser">
+                                            <Button Background="Transparent" BorderThickness="0" HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Left" Padding="6,5" CornerRadius="8"
+                                                    Tag="{x:Bind}" Click="OnMemberItemClicked">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Grid Width="28" Height="28" PointerEntered="OnAvatarPointerEntered" PointerExited="OnAvatarPointerExited">
+                                                        <Ellipse Fill="{ThemeResource ControlFillColorSecondaryBrush}" />
+                                                        <Ellipse>
+                                                            <Ellipse.Fill>
+                                                                <ImageBrush ImageSource="{x:Bind AvatarUrl, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
+                                                            </Ellipse.Fill>
+                                                        </Ellipse>
+                                                    </Grid>
+                                                    <TextBlock Text="{x:Bind DisplayName}" VerticalAlignment="Center" FontSize="13" TextTrimming="CharacterEllipsis" MaxWidth="135" />
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- Barre de saisie de message (avec bannière Réponse/Édition, Collage Presse-papiers & Sélecteur d'Emojis) -->
+                    <StackPanel Grid.Row="2" Grid.Column="0" Visibility="{x:Bind ViewModel.TextViewVisibility, Mode=OneWay}" Padding="16,0,16,16" Spacing="6">
+                        <!-- Bannière Réponse ou Modification en cours -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="8" Padding="12,6"
+                                Visibility="{x:Bind ViewModel.ComposerBannerVisibility, Mode=OneWay}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{x:Bind ViewModel.ComposerBannerText, Mode=OneWay}"
+                                           FontSize="12" FontWeight="SemiBold" Opacity="0.85"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <Button Grid.Column="1" Content="✕" FontSize="11" Padding="6,2" CornerRadius="6"
+                                        Background="Transparent" BorderThickness="0"
+                                        Click="OnCancelComposerActionClicked" ToolTipService.ToolTip="Annuler" />
+                            </Grid>
+                        </Border>
+
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Button Grid.Column="0" Width="40" Height="40" CornerRadius="20" Padding="0"
+                                    Background="{ThemeResource ControlFillColorDefaultBrush}" BorderThickness="0"
+                                    Click="OnAttachFileClicked" ToolTipService.ToolTip="Joindre un fichier ou une image">
+                                <FontIcon Glyph="&#xE710;" FontSize="16" />
+                            </Button>
+
+                            <Button Grid.Column="1" Width="40" Height="40" CornerRadius="20" Padding="0"
+                                    Background="{ThemeResource ControlFillColorDefaultBrush}" BorderThickness="0"
+                                    Click="OnPasteClipboardAttachmentClicked" ToolTipService.ToolTip="Envoyer l'image du presse-papiers">
+                                <FontIcon Glyph="&#xE77F;" FontSize="15" />
+                            </Button>
+
+                            <TextBox Grid.Column="2" x:Name="MessageInput"
+                                     PlaceholderText="Écrire un message... ( >4000 car. converti en message.txt )"
+                                     CornerRadius="10" BorderThickness="0"
+                                     Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                     Padding="14,10"
+                                     KeyDown="OnMessageInputKeyDown" />
+
+                            <!-- Sélecteur d'Emojis rapide -->
+                            <Button Grid.Column="3" Width="40" Height="40" CornerRadius="20" Padding="0"
+                                    Background="{ThemeResource ControlFillColorDefaultBrush}" BorderThickness="0"
+                                    Content="😀" FontSize="16" ToolTipService.ToolTip="Insérer un émoji">
+                                <Button.Flyout>
+                                    <Flyout Placement="Top">
+                                        <StackPanel Width="260" Spacing="8">
+                                            <TextBlock Text="Émojis rapides" FontWeight="SemiBold" FontSize="13" />
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <Button Content="😀" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="😂" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="🥹" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="😍" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="😎" Click="OnQuickEmojiInsertClicked" />
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <Button Content="👍" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="❤️" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="🔥" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="🎉" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="💯" Click="OnQuickEmojiInsertClicked" />
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <Button Content="🤔" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="😭" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="🙏" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="👀" Click="OnQuickEmojiInsertClicked" />
+                                                <Button Content="🚀" Click="OnQuickEmojiInsertClicked" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
+
+                            <Button Grid.Column="4" Content="Envoyer" Click="OnSendClicked"
+                                    CornerRadius="10"
+                                    Style="{StaticResource AccentButtonStyle}" />
+                        </Grid>
+                    </StackPanel>
 
                     <!-- Barre de contrôles vocal en bas si on est dans un vocal -->
-                    <Grid Grid.Row="2" Visibility="{x:Bind ViewModel.VoiceViewVisibility, Mode=OneWay}" Padding="16,0,16,16">
+                    <Grid Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Visibility="{x:Bind ViewModel.VoiceViewVisibility, Mode=OneWay}" Padding="16,0,16,16">
                         <Border Background="{ThemeResource LayerFillColorDefaultBrush}" CornerRadius="16" Padding="12,8" HorizontalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="16">
                                 <Button Width="40" Height="40" CornerRadius="20" Background="{ThemeResource ControlFillColorDefaultBrush}"

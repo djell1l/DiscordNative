@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace DiscordNative.Protocol.Models;
 
@@ -21,4 +21,18 @@ public sealed class DiscordRelationship
 
     [JsonPropertyName("user")]
     public DiscordUser User { get; set; } = new();
+
+    public bool IsFriend => Type == DiscordRelationshipType.Friend;
+    public bool IsPending => Type is DiscordRelationshipType.PendingIncoming or DiscordRelationshipType.PendingOutgoing;
+    public bool IsPendingIncoming => Type == DiscordRelationshipType.PendingIncoming;
+    public bool IsBlocked => Type == DiscordRelationshipType.Blocked;
+
+    public string SubtitleText => Type switch
+    {
+        DiscordRelationshipType.PendingIncoming => "Demande d'ami reçue",
+        DiscordRelationshipType.PendingOutgoing => "Demande d'ami envoyée",
+        DiscordRelationshipType.Blocked => "Utilisateur bloqué",
+        _ => User.UserTag
+    };
 }
+

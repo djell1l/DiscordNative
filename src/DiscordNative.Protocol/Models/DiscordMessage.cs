@@ -49,6 +49,9 @@ public sealed class DiscordMessage
     [JsonPropertyName("referenced_message")]
     public DiscordMessage? ReferencedMessage { get; set; }
 
+    [JsonPropertyName("poll")]
+    public DiscordPoll? Poll { get; set; }
+
     [JsonPropertyName("nonce")]
     public object? Nonce { get; set; }
 
@@ -100,6 +103,7 @@ public sealed class DiscordMessage
     public bool HasContent => IsNormal && !string.IsNullOrEmpty(Content);
 
     public bool IsEdited => EditedTimestamp is not null;
+    public string EditedText => IsEdited ? "(modifié)" : string.Empty;
 
     public string TimeText
     {
@@ -116,6 +120,8 @@ public sealed class DiscordMessage
     public string ShortTime => Timestamp.ToLocalTime().ToString("HH:mm");
 
     public bool IsReply => ReferencedMessage is not null;
+    public string ReplyAuthorName => ReferencedMessage?.Author.DisplayName ?? "Message original";
+    public string? ReplyAuthorAvatarUrl => ReferencedMessage?.Author.AvatarUrl;
 
     public string ReplyPreview => ReferencedMessage is null
         ? string.Empty
@@ -130,6 +136,7 @@ public sealed class DiscordMessage
     public bool HasEmbeds => Embeds.Count > 0;
     public bool HasStickers => StickerItems.Count > 0;
     public bool HasReactions => Reactions.Count > 0;
+    public bool HasPoll => Poll is not null;
 }
 
 public sealed class DiscordAttachment
@@ -306,3 +313,29 @@ public sealed class DiscordEmoji
     public bool IsUnicode => Id is null;
     public string? ImageUrl => Id is null ? null : $"https://cdn.discordapp.com/emojis/{Id}.{(Animated ? "gif" : "png")}?size=48";
 }
+
+public sealed class DiscordPoll
+{
+    [JsonPropertyName("question")] public DiscordPollMedia Question { get; set; } = new();
+    [JsonPropertyName("answers")] public List<DiscordPollAnswer> Answers { get; set; } = new();
+    [JsonPropertyName("allow_multiselect")] public bool AllowMultiselect { get; set; }
+
+    public string QuestionText => Question?.Text ?? "Sondage";
+}
+
+public sealed class DiscordPollMedia
+{
+    [JsonPropertyName("text")] public string? Text { get; set; }
+    [JsonPropertyName("emoji")] public DiscordEmoji? Emoji { get; set; }
+}
+
+public sealed class DiscordPollAnswer
+{
+    [JsonPropertyName("answer_id")] public int AnswerId { get; set; }
+    [JsonPropertyName("poll_media")] public DiscordPollMedia PollMedia { get; set; } = new();
+
+    public string DisplayText => PollMedia?.Emoji?.Name is string e && !string.IsNullOrEmpty(e)
+        ? $"{e}  {PollMedia.Text}"
+        : PollMedia?.Text ?? $"Option {AnswerId}";
+}
+
