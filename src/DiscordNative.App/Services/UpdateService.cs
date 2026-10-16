@@ -39,7 +39,7 @@ public sealed class UpdateInfo
 public static class UpdateService
 {
     private const string RepoOwner = "djell1l";
-    private const string RepoName = "DiscordNative";
+    private const string RepoName = "Diswin";
     private static readonly HttpClient Http = new();
 
     public static async Task<UpdateInfo?> CheckForUpdatesAsync()

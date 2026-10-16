@@ -60,8 +60,8 @@ Diswin watches GitHub Releases on startup. When a new build drops, an in-app ban
 ### Build & Run
 ```powershell
 # Clone the repository
-git clone https://github.com/djell1l/DiscordNative.git
-cd DiscordNative
+git clone https://github.com/djell1l/Diswin.git
+cd Diswin
 
 # Compile and launch
 .\build.ps1
@@ -73,7 +73,7 @@ cd DiscordNative
 AI is the future — why whisper about it on GitHub like it's a dirty secret? While everyone else pretends they hand-carved 50,000 lines of boilerplate by candlelight, we own it: pairing human ambition with cutting-edge AI pair programming to build what multi-billion-dollar companies were too lazy to ship.
 
 - **[djell1l](https://github.com/djell1l)** — Lead developer & creator
-- **Claude** & **Gemini** (via **Antigravity**) — AI pair programming collaborators and architecture co-design
+- **[Claude](https://github.com/anthropics)** ([@anthropics](https://github.com/anthropics)) & **[Gemini](https://github.com/google-gemini)** ([@google-gemini](https://github.com/google-gemini)) via **[Antigravity](https://github.com/google-deepmind)** ([@google-deepmind](https://github.com/google-deepmind)) — AI pair programming collaborators and architecture co-design
 - **[SakuraCord](https://github.com/SakuraCordApp/SakuraCord)** — Concept and native client philosophy
 - **[Files](https://github.com/files-community/Files)** — UI/UX inspiration for WinUI 3 controls and background customization
 - **[Oleglog](https://github.com/Oleglog)** — Fork contributions integrated for the v0.3.1 release
