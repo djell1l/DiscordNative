@@ -1,6 +1,8 @@
 # Diswin
 
-A fast, lightweight, and 100% native Discord desktop client engineered for **Windows 11 & Windows 10** using **C# (.NET 8)**, **WinUI 3**, and the **Windows App SDK** — with zero Electron, zero CEF, and zero WebView wrappers. Respect your ecosystem.
+Running an entire Chromium browser in the background just to send a few text messages on Windows is an insult to your hardware. Respect your ecosystem.
+
+Diswin is a 100% native Discord client engineered from scratch in **C# (.NET 8)** and **WinUI 3**. No Electron. No CEF. No disguised web browser quietly devouring half a gigabyte of your RAM. Either way, you're welcome.
 
 <img src="docs/assets/banner1.gif" width="360" alt="Diswin Showcase" />
 
@@ -10,15 +12,14 @@ A fast, lightweight, and 100% native Discord desktop client engineered for **Win
 
 <img src="docs/assets/banner2.gif" width="360" alt="Interface Demo" />
 
-- **Fluent Design & Personalization**: Deep integration with Windows 11 design standards, including Mica materials (`SystemBackdrop`), dark and light mode synchronization, squircle geometries, adjustable interface scaling, and customizable wallpaper backgrounds with blur and opacity inspired by [Files](https://github.com/files-community/Files).
-- **Frictionless Authentication**: Instant QR Code login via official Discord Remote Auth v2 (scan from your mobile app, done), full 2FA support (TOTP, SMS, Backup codes), and direct token login.
-- **Complete Messaging & Timeline**: Replies (`ReferencedMessage`), inline message editing, pinned messages drawer, mentions inbox, stickers, native polls, file attachment cards, clipboard image paste, automatic conversion of `>4000` character messages into `message.txt`, and built-in message translation.
-- **Hover-Only Icon Animations**: Server and user avatars only play animations when hovered by the cursor, matching official Discord behavior.
-- **Rich Context Menus & Member List**: Native right-click context flyouts for messages, channels, servers (join, create invite, leave), and friends (All, Pending, Blocked filters), plus a toggleable right-side participant panel.
-- **Interactive Profiles & Banners**: Discord banner support, custom bio display, quick Direct Message input, and in-app profile editing directly from the user card.
-- **Discord-style Startup Experience**: Animated launch sequence with automatic update and gateway connectivity check.
-- **Lightweight Architecture**: Instant startup and minimal memory usage compared to Chromium-based clients.
-- **Multilingual Support**: Extensible localization architecture (`en-US`, `fr-FR`).
+- **Pure WinUI 3 & Fluent Design**: Real Mica backdrop, dark and light theme synchronization, squircle geometry, UI scaling, and custom wallpaper backgrounds with blur and opacity inspired by [Files](https://github.com/files-community/Files). No fake CSS tricks.
+- **Frictionless Login**: Official Discord Remote Auth v2 QR Code login (point your phone, scan, and you're in), full 2FA support (TOTP, SMS, Backup codes with automatic fallback), and direct token login if you like taking the direct highway.
+- **Timeline Done Right**: Full message replies with header previews, inline editing so you can fix your typos before anyone notices, pinned messages, mentions inbox, Discord stickers, native polls, and proper file cards.
+- **Tamed Animations**: Server icons and avatars only animate when your mouse is actually over them, instead of turning your sidebar into a chaotic Vegas casino.
+- **No-Nonsense Context Menus**: Right-click anything for quick actions on messages, channels, servers, and friends, plus a toggleable right-side member drawer.
+- **Banners & Profile Editing**: Full Discord banner rendering, custom bio display, quick DM input, and the ability to edit your own profile without opening a browser.
+- **Instant Launch & Auto-Updater**: Launches immediately, checks for updates in the background, and updates itself in one click.
+- **Multilingual**: Native localization support (`en-US`, `fr-FR`).
 
 ---
 
@@ -38,17 +39,14 @@ DiscordNative.sln
 
 ## Installation & Distribution
 
-### 1. WinUI 3 Installer (`Diswin-Setup-v0.3.1-win-x64.zip`)
-- Download and extract the installer bundle from [Releases](https://github.com/djell1l/DiscordNative/releases).
-- Launch `Setup.exe` — a modern Windows 11 setup wizard written in C# and WinUI 3.
-- Custom installation path, automatic Desktop and Start Menu shortcut creation.
+### 1. WinUI 3 Setup (`Diswin-Setup-v0.3.1-win-x64.zip`)
+Download, unzip, and run `Setup.exe`. It is a real Windows 11 installer wizard written in WinUI 3 that sets up the app, drops a shortcut on your Desktop, hooks into your Start Menu, and gets out of your way.
 
-### 2. Standalone Portable Package (`Diswin-v0.3.1-win-x64-portable.zip`)
-- Extract anywhere.
-- Run `DiscordNative.App.exe` directly without setup.
+### 2. Standalone Portable (`Diswin-v0.3.1-win-x64-portable.zip`)
+For the minimalists. Unzip anywhere, run `DiscordNative.App.exe`, and get back to what you were doing.
 
 ### 3. Automatic Updates
-Diswin includes an integrated WinUI 3 `InfoBar` notification banner that checks GitHub Releases on startup and allows seamless in-app automatic updates with one click.
+Diswin watches GitHub Releases on startup. When a new build drops, an in-app banner lets you update and restart in one click.
 
 ---
 
