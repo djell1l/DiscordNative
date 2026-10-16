@@ -100,7 +100,7 @@
                         <ComboBox x:Name="UpdateChannelCombo" Header="Canal de mise à jour"
                                   SelectionChanged="OnUpdateChannelChanged" HorizontalAlignment="Stretch">
                             <ComboBoxItem Content="Stable (Recommandé)" Tag="Stable" />
-                            <ComboBoxItem Content="Expérimental (Préversions)" Tag="Experimental" />
+                            <ComboBoxItem Content="Bleeding Edge (Mises à jour rapides &amp; préversions)" Tag="Experimental" />
                         </ComboBox>
 
                         <StackPanel Orientation="Horizontal" Spacing="8">
