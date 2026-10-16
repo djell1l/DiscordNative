@@ -1,35 +1,33 @@
 # Diswin
 
-> *"Am I a genius? Obviously. Or maybe I'm just dangerously over-imaginative. Either way, you're welcome."*
+Running an entire Chromium browser in the background just to send a few text messages on Windows is an insult to your hardware. Respect your ecosystem.
 
-**Respect your ecosystem.** Running a full Chromium browser in the background just to send messages on Windows is an insult to your RAM. **Diswin** is a 100% native Windows 11 & Windows 10 Discord client built from the ground up in **C# (.NET 8)** and **WinUI 3** — zero Electron, zero CEF, zero WebView wrappers.
+**Diswin** is a 100% native Discord client built from scratch in **C# (.NET 8)** and **WinUI 3**. No Electron. No CEF. No disguised web wrappers eating half a gigabyte of RAM for breakfast. Either way, you're welcome.
 
 <p align="left">
-  <img src="docs/assets/banner1.gif" width="240" alt="Showcase 1" />
-  <img src="docs/assets/banner2.gif" width="240" alt="Showcase 2" />
+  <img src="docs/assets/banner1.gif" width="240" alt="Diswin Showcase" />
+  <img src="docs/assets/banner2.gif" width="240" alt="Interface Demo" />
 </p>
 
 ---
 
-## Philosophy
+## Why It Exists
 
-Most "lightweight" clients still wrap a web browser and call it a day. Diswin talks directly to the Discord Gateway and REST APIs and renders everything through native WinUI 3 controls, Mica materials, and hardware-accelerated DirectComposition.
+Most "lightweight" clients still wrap a web browser, slap a theme on it, and call it native. Diswin talks directly to the Discord Gateway and REST APIs and renders everything through real Windows 11 WinUI 3 controls, Mica materials, and hardware-accelerated DirectComposition.
 
-- **Pure WinUI 3 & Fluent Design**: Native Mica backdrop, dark/light theme synchronization, squircle geometry, adjustable UI scaling, and custom background wallpapers with blur and opacity inspired by [Files](https://github.com/files-community/Files).
-- **Frictionless Authentication**: Official Discord Remote Auth v2 QR Code login (scan from your phone, done), full TOTP/SMS/Backup 2FA support, and direct token login.
-- **Complete Native Experience**: Replies, inline editing, pinned messages, mentions inbox, stickers, polls, voice channels, profile banners, hover-only animated avatars, right-click context menus, and a built-in auto-updater.
-- **Multilingual Ready**: Designed for multiple languages (`en-US`, `fr-FR`).
+- **Pure WinUI 3 & Fluent Design** — Real Mica backdrop, dark/light theme sync, squircle geometry, UI scaling, and custom wallpaper backgrounds with blur and opacity inspired by [Files](https://github.com/files-community/Files).
+- **Zero-Drama Login** — Instant QR Code login via Discord Remote Auth v2 (scan from your phone, done), full 2FA support (TOTP, SMS, Backup codes), or direct token login.
+- **Built Properly** — Replies, inline editing, pinned messages, mentions inbox, stickers, polls, voice rooms, profile banners, hover-only animated icons, right-click context menus, and a seamless in-app auto-updater.
+- **Multilingual** — Built-in localization support (`en-US`, `fr-FR`).
 
 ---
 
-## Get It
+## Installation
 
-Grab the latest release from [GitHub Releases](https://github.com/djell1l/DiscordNative/releases):
+Grab the latest build from [Releases](https://github.com/djell1l/DiscordNative/releases):
 
-- **WinUI 3 Setup (`Diswin-Setup-v0.3.1-win-x64.zip`)** — Native WinUI 3 installer wizard (`Setup.exe`) with custom install path, Desktop shortcut, and Start Menu integration.
-- **Portable Archive (`Diswin-v0.3.1-win-x64-portable.zip`)** — Extract anywhere and launch `DiscordNative.App.exe`.
-
-Updates are checked automatically on launch with one-click in-app installation.
+- **WinUI 3 Setup (`Diswin-Setup-v0.3.1-win-x64.zip`)** — A native C# / WinUI 3 installer (`Setup.exe`) that sets up the app, Desktop shortcut, and Start Menu entry cleanly.
+- **Portable (`Diswin-v0.3.1-win-x64-portable.zip`)** — Extract anywhere and run `DiscordNative.App.exe`. No strings attached.
 
 ---
 
@@ -45,22 +43,22 @@ cd DiscordNative
 
 ---
 
-## Credits & Contributors
+## Credits
 
-- **[djell1l](https://github.com/djell1l)** — Creator & lead developer
+- **[djell1l](https://github.com/djell1l)** — Creator & lead developer of Diswin
 - **Claude** & **Gemini** (via **Antigravity**) — AI engineering collaborators
-- **[SakuraCord](https://github.com/SakuraCordApp/SakuraCord)**, **[Files](https://github.com/files-community/Files)** & **[Oleglog](https://github.com/Oleglog)** — Inspiration for native WinUI 3 architecture and great community fork contributions
+- Inspired by **[Files](https://github.com/files-community/Files)** and **[SakuraCord](https://github.com/SakuraCordApp/SakuraCord)**, with a nod to **[Oleglog](https://github.com/Oleglog)** for his community fork PR/commits on auth flows
 
 ---
 
 ## License
 
-Licensed under the **GNU General Public License v3.0 (GPL-3.0)**. See [LICENSE](LICENSE) for full terms.
+Licensed under the **GNU General Public License v3.0 (GPL-3.0)**. See [LICENSE](LICENSE) for full details.
 
-Any fork, modification, or redistribution must remain open-source under the same license and credit the original authors. Turning this project into closed-source software is strictly prohibited.
+Any fork, derivative work, or redistribution must remain open-source under the same GPL-3.0 license and credit the original project. Stealing this code to make it closed-source is strictly off the table.
 
 ---
 
 ## Disclaimer
 
-Unofficial third-party client built for educational and experimental purposes. Not affiliated with Discord Inc. Use at your own discretion.
+Diswin is an independent third-party client built for educational and experimental purposes. Not affiliated with Discord Inc. Use at your own discretion.
