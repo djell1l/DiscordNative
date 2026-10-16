@@ -1,6 +1,6 @@
 # Diswin
 
-Running an entire Chromium browser in the background just to send a few text messages on Windows is an insult to your hardware. Respect your ecosystem.
+Running an entire Chromium browser in the background just to send a few text messages on Windows is an insult to your hardware. If Apple gets to flex its sleek Swift and SwiftUI native ecosystem, why on earth shouldn't Windows get the exact same first-class treatment? Respect your ecosystem.
 
 Diswin is a 100% native Discord client engineered from scratch in **C# (.NET 8)** and **WinUI 3**. No Electron. No CEF. No disguised web browser quietly devouring half a gigabyte of your RAM. Either way, you're welcome.
 
@@ -70,6 +70,7 @@ cd DiscordNative
 ---
 
 ## Contributors & Credits
+AI is the future — why whisper about it on GitHub like it's a dirty secret? While everyone else pretends they hand-carved 50,000 lines of boilerplate by candlelight, we own it: pairing human ambition with cutting-edge AI pair programming to build what multi-billion-dollar companies were too lazy to ship.
 
 - **[djell1l](https://github.com/djell1l)** — Lead developer & creator
 - **Claude** & **Gemini** (via **Antigravity**) — AI pair programming collaborators and architecture co-design
