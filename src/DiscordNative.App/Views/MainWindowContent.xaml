@@ -222,6 +222,21 @@
                                                                 Visibility="{x:Bind IsStreaming, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                                                             <TextBlock Text="LIVE" FontSize="9" FontWeight="Bold" Foreground="White" />
                                                         </Border>
+
+                                                        <!-- Icône du Jeu / Activité en cours comme sur Discord officiel -->
+                                                        <Border Width="16" Height="16" CornerRadius="3" VerticalAlignment="Center"
+                                                                Visibility="{x:Bind HasGameActivity, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                ToolTipService.ToolTip="{x:Bind GameTooltipText, Mode=OneWay}">
+                                                            <Grid>
+                                                                <!-- Image officielle du jeu (Hollow Knight, LoL, etc.) -->
+                                                                <Image Source="{x:Bind CurrentGameIconUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}"
+                                                                       Stretch="UniformToFill"
+                                                                       Visibility="{x:Bind HasCurrentGameIcon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                                <!-- Icône Manette de jeu par défaut si l'image n'est pas fournie -->
+                                                                <FontIcon Glyph="&#xE7FC;" FontSize="11" Foreground="#949BA4" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                                                          Visibility="{x:Bind HasCurrentGameIcon, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibilityConverter}}" />
+                                                            </Grid>
+                                                        </Border>
                                                     </StackPanel>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>

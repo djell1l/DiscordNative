@@ -767,6 +767,16 @@ public sealed class DiscordClient : IAsyncDisposable
                 }
             }
 
+            foreach (var chDict in _voiceChannelMembers.Values)
+            {
+                if (chDict.TryGetValue(userId, out var vu))
+                {
+                    vu.Status = status;
+                    vu.Activities = activities;
+                    vu.NotifyPresenceChanged();
+                }
+            }
+
             PresenceUpdated?.Invoke(userId);
         });
     }

@@ -3,6 +3,7 @@ using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using DiscordNative.Protocol;
 using DiscordNative.Protocol.Models;
+using DiscordNative.App.Services;
 
 namespace DiscordNative.App.ViewModels;
 
@@ -533,10 +534,15 @@ public sealed partial class MainViewModel : ObservableObject
             var targetGuildId = channel.GuildId ?? _selectedGuild?.Id;
             if (targetGuildId != null)
             {
+                bool wasConnected = IsVoiceConnected;
                 channel.GuildId ??= targetGuildId;
                 _ = _client.JoinVoiceChannelAsync(targetGuildId, channel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
                 IsVoiceConnected = true;
                 ConnectedVoiceChannelName = channel.DisplayName;
+                if (!wasConnected)
+                {
+                    AudioSfxService.Play(DiscordSfx.Join);
+                }
             }
 
             RefreshVoiceParticipants(channel.Id);
@@ -974,6 +980,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     public void DisconnectVoice()
     {
+        bool wasConnected = IsVoiceConnected;
         _ = _client.LeaveVoiceChannelAsync();
         IsVoiceConnected = false;
         IsScreenSharing = false;
@@ -982,6 +989,10 @@ public sealed partial class MainViewModel : ObservableObject
         ConnectedVoiceChannelName = string.Empty;
         VoiceParticipants.Clear();
         NotifyScreenShareAndCameraChanged();
+        if (wasConnected)
+        {
+            AudioSfxService.Play(DiscordSfx.Disconnect);
+        }
         if (IsVoiceChannelSelected)
         {
             IsVoiceChannelSelected = false;
@@ -994,15 +1005,23 @@ public sealed partial class MainViewModel : ObservableObject
     public async Task StartOrJoinVoiceCallInCurrentChannelAsync()
     {
         if (_selectedChannel is null) return;
+        bool wasConnected = IsVoiceConnected;
         IsVoiceChannelSelected = true;
         OnPropertyChanged(nameof(VoiceViewVisibility));
         OnPropertyChanged(nameof(TextViewVisibility));
         OnPropertyChanged(nameof(MemberListVisibility));
 
-        await _client.JoinVoiceChannelAsync(_selectedChannel.GuildId, _selectedChannel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
+        var targetGuildId = _selectedChannel.GuildId ?? _selectedGuild?.Id;
+        _selectedChannel.GuildId ??= targetGuildId;
+
+        await _client.JoinVoiceChannelAsync(targetGuildId, _selectedChannel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
         IsVoiceConnected = true;
         ConnectedVoiceChannelName = _selectedChannel.DisplayName;
         RefreshVoiceParticipants(_selectedChannel.Id);
+        if (!wasConnected)
+        {
+            AudioSfxService.Play(DiscordSfx.Join);
+        }
     }
 
     public async Task StartScreenShareAsync(string title, string qualityBadge, bool shareSystemAudio)
@@ -1073,9 +1092,11 @@ public sealed partial class MainViewModel : ObservableObject
     {
         IsMuted = !IsMuted;
         OnPropertyChanged(nameof(MuteOpacity));
+        AudioSfxService.Play(IsMuted ? DiscordSfx.Mute : DiscordSfx.Unmute);
         if (_selectedChannel is not null && IsVoiceConnected)
         {
-            _ = _client.JoinVoiceChannelAsync(_selectedChannel.GuildId, _selectedChannel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
+            var targetGuildId = _selectedChannel.GuildId ?? _selectedGuild?.Id;
+            _ = _client.JoinVoiceChannelAsync(targetGuildId, _selectedChannel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
         }
     }
 
@@ -1085,9 +1106,11 @@ public sealed partial class MainViewModel : ObservableObject
         if (IsDeafened) IsMuted = true;
         OnPropertyChanged(nameof(DeafenOpacity));
         OnPropertyChanged(nameof(MuteOpacity));
+        AudioSfxService.Play(IsDeafened ? DiscordSfx.Deafen : DiscordSfx.Undeafen);
         if (_selectedChannel is not null && IsVoiceConnected)
         {
-            _ = _client.JoinVoiceChannelAsync(_selectedChannel.GuildId, _selectedChannel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
+            var targetGuildId = _selectedChannel.GuildId ?? _selectedGuild?.Id;
+            _ = _client.JoinVoiceChannelAsync(targetGuildId, _selectedChannel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
         }
     }
 

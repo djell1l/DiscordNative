@@ -23,6 +23,11 @@ public sealed class DiscordUser : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasRichPresence));
         OnPropertyChanged(nameof(HasActivityOrCustomStatus));
         OnPropertyChanged(nameof(ActivitySummaryText));
+        OnPropertyChanged(nameof(HasGameActivity));
+        OnPropertyChanged(nameof(CurrentGameName));
+        OnPropertyChanged(nameof(CurrentGameIconUrl));
+        OnPropertyChanged(nameof(HasCurrentGameIcon));
+        OnPropertyChanged(nameof(GameTooltipText));
     }
 
     public void NotifyProfileEnriched()
@@ -220,6 +225,14 @@ public sealed class DiscordUser : INotifyPropertyChanged
             return string.Empty;
         }
     }
+
+    public bool HasGameActivity => PrimaryActivity is not null && (PrimaryActivity.Type == 0 || PrimaryActivity.Type == 1);
+    public string? CurrentGameName => PrimaryActivity?.Name;
+    public string? CurrentGameIconUrl => PrimaryActivity?.SmallImageUrl ?? PrimaryActivity?.LargeImageUrl;
+    public bool HasCurrentGameIcon => !string.IsNullOrEmpty(CurrentGameIconUrl);
+    public string GameTooltipText => PrimaryActivity != null
+        ? (PrimaryActivity.Type == 1 ? $"En stream : {PrimaryActivity.Name}" : $"Joue à {PrimaryActivity.Name}")
+        : string.Empty;
 
     [JsonPropertyName("nick")]
     public string? ServerNick { get; set; }

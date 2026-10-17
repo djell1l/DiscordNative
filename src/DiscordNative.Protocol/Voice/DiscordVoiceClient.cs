@@ -103,28 +103,24 @@ public sealed class DiscordVoiceClient : IAsyncDisposable
 
     public async Task ConnectAsync(CancellationToken ct = default)
     {
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _ws = new ClientWebSocket();
-        _ws.Options.SetRequestHeader("Origin", "https://discord.com");
-
-        var uri = new Uri($"wss://{_endpoint}/?v=4");
-        await _ws.ConnectAsync(uri, _cts.Token);
-
-        // OP 0 : Identify
-        var identify = new
+        try
         {
-            op = 0,
-            d = new
-            {
-                server_id = _guildId,
-                user_id = _userId,
-                session_id = _sessionId,
-                token = _token
-            }
-        };
-        await SendJsonAsync(identify, _cts.Token);
+            _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _ws = new ClientWebSocket();
+            _ws.Options.SetRequestHeader("Origin", "https://discord.com");
 
-        _ = Task.Run(() => GatewayReceiveLoopAsync(_cts.Token), _cts.Token);
+            var uri = new Uri($"wss://{_endpoint}/?v=8");
+            await _ws.ConnectAsync(uri, _cts.Token);
+
+            _ = Task.Run(() => GatewayReceiveLoopAsync(_cts.Token), _cts.Token);
+        }
+        catch (Exception ex)
+        {
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DiscordNative_crash.log"),
+                $"[{DateTime.Now}] Voice ConnectAsync failed on {_endpoint}: {ex}\n\n");
+            throw;
+        }
     }
 
     private async Task GatewayReceiveLoopAsync(CancellationToken ct)
@@ -156,6 +152,20 @@ public sealed class DiscordVoiceClient : IAsyncDisposable
                         {
                             int intervalMs = (int)hbEl.GetDouble();
                             _ = Task.Run(() => HeartbeatLoopAsync(intervalMs, ct), ct);
+
+                            // Voice Gateway v8 : Envoyer OP 0 (Identify) dès réception du Hello
+                            var identify = new
+                            {
+                                op = 0,
+                                d = new
+                                {
+                                    server_id = _guildId,
+                                    user_id = _userId,
+                                    session_id = _sessionId,
+                                    token = _token
+                                }
+                            };
+                            await SendJsonAsync(identify, ct);
                         }
                         break;
 
@@ -187,6 +197,7 @@ public sealed class DiscordVoiceClient : IAsyncDisposable
                             {
                                 _selectedMode = modeEl.GetString() ?? _selectedMode;
                             }
+                            await SendSpeakingAsync(false);
                             StartAudioPipeline(ct);
                         }
                         break;
@@ -212,7 +223,12 @@ public sealed class DiscordVoiceClient : IAsyncDisposable
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DiscordNative_crash.log"),
+                $"[{DateTime.Now}] Voice GatewayReceiveLoopAsync error: {ex}\n\n");
+        }
     }
 
     private async Task SetupUdpAndSelectProtocolAsync(CancellationToken ct)
@@ -272,30 +288,53 @@ public sealed class DiscordVoiceClient : IAsyncDisposable
             };
 
             // 1. Démarrer la sortie audio (Haut-parleurs / Casque)
-            _playbackBuffer = new BufferedWaveProvider(new WaveFormat(48000, 16, 2))
+            try
             {
-                BufferDuration = TimeSpan.FromSeconds(2),
-                DiscardOnBufferOverflow = true
-            };
-            _speakerOut = new WasapiOut(AudioClientShareMode.Shared, 40);
-            _speakerOut.Init(_playbackBuffer);
-            _speakerOut.Play();
+                _playbackBuffer = new BufferedWaveProvider(new WaveFormat(48000, 16, 2))
+                {
+                    BufferDuration = TimeSpan.FromSeconds(2),
+                    DiscardOnBufferOverflow = true
+                };
+                _speakerOut = new WasapiOut(AudioClientShareMode.Shared, 40);
+                _speakerOut.Init(_playbackBuffer);
+                _speakerOut.Play();
+            }
+            catch (Exception ex)
+            {
+                System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DiscordNative_crash.log"),
+                    $"[{DateTime.Now}] WasapiOut failed: {ex}\n\n");
+            }
 
             // 2. Boucle de réception UDP -> Déchiffrement -> Décodage Opus -> Haut-parleurs
             _ = Task.Run(() => UdpReceiveAudioLoopAsync(ct), ct);
 
             // 3. Démarrer la capture Microphone WASAPI
-            _micCapture = new WasapiCapture();
-            var capFormat = _micCapture.WaveFormat;
-            _micCapture.DataAvailable += (_, e) => OnMicDataAvailable(e.Buffer, e.BytesRecorded, capFormat);
-            _micCapture.StartRecording();
+            try
+            {
+                _micCapture = new WasapiCapture();
+                var capFormat = _micCapture.WaveFormat;
+                _micCapture.DataAvailable += (_, e) => OnMicDataAvailable(e.Buffer, e.BytesRecorded, capFormat);
+                _micCapture.StartRecording();
+            }
+            catch (Exception ex)
+            {
+                System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DiscordNative_crash.log"),
+                    $"[{DateTime.Now}] WasapiCapture failed: {ex}\n\n");
+            }
 
             if (_isSystemAudioSharingEnabled)
             {
                 UpdateSystemAudioLoopback(true);
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DiscordNative_crash.log"),
+                $"[{DateTime.Now}] StartAudioPipeline error: {ex}\n\n");
+        }
     }
 
     private void UpdateSystemAudioLoopback(bool enable)
