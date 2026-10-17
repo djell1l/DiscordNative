@@ -172,19 +172,19 @@
                                                 Background="#111214"
                                                 BorderBrush="#1E1F22" BorderThickness="2"
                                                 CornerRadius="9" Width="18" Height="18"
-                                                Visibility="{x:Bind HasVoiceActivity, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                Visibility="{x:Bind HasVoiceBadge, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                                 ToolTipService.ToolTip="Membres connectés en vocal">
                                             <FontIcon Glyph="&#xE767;" FontSize="9" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
 
-                                        <!-- Badge Stream en haut à droite (écran sur fond noir si pas de vocal) -->
+                                        <!-- Badge Stream en haut à droite (écran sur fond noir si stream en cours) -->
                                         <Border HorizontalAlignment="Right" VerticalAlignment="Top"
                                                 Margin="0,-3,-3,0"
                                                 Background="#111214"
                                                 BorderBrush="#1E1F22" BorderThickness="2"
                                                 CornerRadius="9" Width="18" Height="18"
-                                                Visibility="{x:Bind HasStreamActivityAndNoVoice, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                ToolTipService.ToolTip="Partage d'écran en cours">
+                                                Visibility="{x:Bind HasStreamBadge, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                ToolTipService.ToolTip="Partage d'écran / Stream en cours">
                                             <FontIcon Glyph="&#xE7F4;" FontSize="9" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
 
@@ -267,9 +267,24 @@
                                                     </MenuFlyoutItem>
                                                 </MenuFlyout>
                                             </StackPanel.ContextFlyout>
-                                            <FontIcon Glyph="{x:Bind Type, Converter={StaticResource ChannelTypeToGlyphConverter}}"
-                                                      FontSize="14" Opacity="0.6" />
+                                            <!-- Icône Salon Texte (#) ou Salon Vocal (Haut-parleur) -->
+                                            <Grid Width="16" Height="16" VerticalAlignment="Center">
+                                                <FontIcon Glyph="&#xE767;" FontSize="13"
+                                                          Foreground="{x:Bind VoiceSpeakerColorBrush, Mode=OneWay}"
+                                                          Visibility="{x:Bind IsVoiceChannel, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                <TextBlock Text="#" FontSize="15" FontWeight="Bold" Foreground="#949BA4"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0"
+                                                           Visibility="{x:Bind IsVoiceChannel, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibilityConverter}}" />
+                                            </Grid>
+
                                             <TextBlock Text="{x:Bind DisplayName}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+
+                                            <!-- Badge du nombre d'utilisateurs connectés en vocal (ex: 02 / 99) -->
+                                            <Border Background="#2B2D31" CornerRadius="8" Padding="6,1" VerticalAlignment="Center" Margin="6,0,0,0"
+                                                    Visibility="{x:Bind HasConnectedVoiceMembers, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBlock Text="{x:Bind VoiceLimitText, Mode=OneWay}" FontSize="10" Foreground="#DBDEE1" FontWeight="SemiBold" />
+                                            </Border>
+
                                             <Border HorizontalAlignment="Right" VerticalAlignment="Center"
                                                     Margin="6,0,0,0"
                                                     Background="#DA373C"

@@ -51,6 +51,9 @@ public sealed class DiscordChannel : INotifyPropertyChanged
     [JsonPropertyName("last_message_id")]
     public string? LastMessageId { get; set; }
 
+    [JsonPropertyName("user_limit")]
+    public int? UserLimit { get; set; }
+
     public bool IsTextLike => Type is DiscordChannelType.GuildText
         or DiscordChannelType.Dm
         or DiscordChannelType.GroupDm
@@ -66,6 +69,14 @@ public sealed class DiscordChannel : INotifyPropertyChanged
 
     [JsonIgnore]
     public bool HasConnectedVoiceMembers => ConnectedVoiceMembers.Count > 0;
+
+    [JsonIgnore]
+    public string VoiceLimitText => UserLimit.HasValue && UserLimit.Value > 0
+        ? $"{ConnectedVoiceMembers.Count:D2} / {UserLimit.Value:D2}"
+        : $"{ConnectedVoiceMembers.Count}";
+
+    [JsonIgnore]
+    public string VoiceSpeakerColorBrush => HasConnectedVoiceMembers ? "#23A55A" : "#949BA4";
 
     private int _mentionCount;
     [JsonIgnore]
@@ -109,6 +120,8 @@ public sealed class DiscordChannel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(ConnectedVoiceMembers));
         OnPropertyChanged(nameof(HasConnectedVoiceMembers));
+        OnPropertyChanged(nameof(VoiceLimitText));
+        OnPropertyChanged(nameof(VoiceSpeakerColorBrush));
     }
 
     /// <summary>Nom d'affichage : pour un DM, on utilise le nom du destinataire.</summary>

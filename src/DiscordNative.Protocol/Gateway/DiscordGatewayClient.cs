@@ -211,7 +211,7 @@ public sealed class DiscordGatewayClient : IAsyncDisposable
         return SendAsync(14, payload, ct);
     }
 
-    public Task SendVoiceStateUpdateAsync(string guildId, string? channelId, bool mute = false, bool deaf = false, bool selfVideo = false, bool selfStream = false, CancellationToken ct = default)
+    public Task SendVoiceStateUpdateAsync(string? guildId, string? channelId, bool mute = false, bool deaf = false, bool selfVideo = false, bool selfStream = false, CancellationToken ct = default)
     {
         var payload = new
         {
@@ -225,11 +225,11 @@ public sealed class DiscordGatewayClient : IAsyncDisposable
         return SendAsync(4, payload, ct);
     }
 
-    public Task SendStreamCreateAsync(string guildId, string channelId, CancellationToken ct = default)
+    public Task SendStreamCreateAsync(string? guildId, string channelId, CancellationToken ct = default)
     {
         var payload = new
         {
-            type = "guild",
+            type = string.IsNullOrEmpty(guildId) ? "call" : "guild",
             guild_id = guildId,
             channel_id = channelId,
             preferred_region = (string?)null

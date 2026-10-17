@@ -298,10 +298,60 @@ public sealed class DiscordRestClient : IDisposable
         }
     }
 
+    public async Task<DiscordUser?> GetUserProfileUserAsync(string userId, string? guildId = null, CancellationToken ct = default)
+    {
+        try
+        {
+            var url = string.IsNullOrEmpty(guildId)
+                ? $"{ApiBase}/users/{userId}/profile?with_mutual_guilds=false"
+                : $"{ApiBase}/users/{userId}/profile?with_mutual_guilds=false&guild_id={guildId}";
+
+            using var resp = await _http.GetAsync(url, ct);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            var root = doc.RootElement;
+
+            DiscordUser? user = null;
+            if (root.TryGetProperty("user", out var uEl) && uEl.ValueKind == JsonValueKind.Object)
+            {
+                user = JsonSerializer.Deserialize<DiscordUser>(uEl.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+
+            if (user != null)
+            {
+                if (root.TryGetProperty("guild_member", out var gmEl) && gmEl.ValueKind == JsonValueKind.Object)
+                {
+                    if (gmEl.TryGetProperty("nick", out var nEl) && nEl.ValueKind == JsonValueKind.String)
+                    {
+                        user.ServerNick = nEl.GetString();
+                    }
+                    if (gmEl.TryGetProperty("avatar", out var aEl) && aEl.ValueKind == JsonValueKind.String)
+                    {
+                        user.ServerAvatar = aEl.GetString();
+                        user.GuildIdForAvatar = guildId;
+                    }
+                    if (gmEl.TryGetProperty("roles", out var rEl) && rEl.ValueKind == JsonValueKind.Array)
+                    {
+                        user.Roles = rEl.EnumerateArray().Select(r => r.GetString() ?? "").Where(r => !string.IsNullOrEmpty(r)).ToList();
+                    }
+                }
+            }
+
+            return user;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public async Task<DiscordUser?> GetUserAsync(string userId, CancellationToken ct = default)
     {
         try
         {
+            var profileUser = await GetUserProfileUserAsync(userId, null, ct);
+            if (profileUser != null) return profileUser;
             return await _http.GetFromJsonAsync<DiscordUser>($"{ApiBase}/users/{userId}", ct);
         }
         catch
@@ -314,6 +364,9 @@ public sealed class DiscordRestClient : IDisposable
     {
         try
         {
+            var profileUser = await GetUserProfileUserAsync(userId, guildId, ct);
+            if (profileUser != null) return profileUser;
+
             using var resp = await _http.GetAsync($"{ApiBase}/guilds/{guildId}/members/{userId}", ct);
             if (!resp.IsSuccessStatusCode) return null;
             using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);

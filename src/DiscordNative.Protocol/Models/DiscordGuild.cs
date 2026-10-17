@@ -169,6 +169,7 @@ public sealed class DiscordGuild : INotifyPropertyChanged
             {
                 _hasVoiceActivity = value;
                 OnPropertyChanged(nameof(HasVoiceActivity));
+                OnPropertyChanged(nameof(HasVoiceBadge));
                 OnPropertyChanged(nameof(HasStreamActivityAndNoVoice));
             }
         }
@@ -185,10 +186,18 @@ public sealed class DiscordGuild : INotifyPropertyChanged
             {
                 _hasStreamActivity = value;
                 OnPropertyChanged(nameof(HasStreamActivity));
+                OnPropertyChanged(nameof(HasStreamBadge));
+                OnPropertyChanged(nameof(HasVoiceBadge));
                 OnPropertyChanged(nameof(HasStreamActivityAndNoVoice));
             }
         }
     }
+
+    [JsonIgnore]
+    public bool HasStreamBadge => HasStreamActivity;
+
+    [JsonIgnore]
+    public bool HasVoiceBadge => HasVoiceActivity && !HasStreamActivity;
 
     [JsonIgnore]
     public bool HasStreamActivityAndNoVoice => HasStreamActivity && !HasVoiceActivity;

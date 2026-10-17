@@ -67,6 +67,12 @@ public sealed class DiscordClient : IAsyncDisposable
     // Suivi en temps réel des membres présents dans chaque salon vocal (channelId -> liste des utilisateurs)
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, DiscordUser>> _voiceChannelMembers = new();
 
+    // Association salon vocal -> serveur (channelId -> guildId)
+    private readonly ConcurrentDictionary<string, string> _channelToGuildMap = new();
+
+    // Salons vocaux connus par serveur (guildId -> ensemble de channelId)
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _guildVoiceChannels = new();
+
     // Cache des membres par serveur (guildId -> (userId -> DiscordUser))
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, DiscordUser>> _guildMembers = new();
 
@@ -178,6 +184,9 @@ public sealed class DiscordClient : IAsyncDisposable
         {
             case "READY":
                 HandleReady(evt.Data);
+                break;
+            case "READY_SUPPLEMENTAL":
+                HandleReadySupplemental(evt.Data);
                 break;
             case "USER_SETTINGS_UPDATE":
                 if (evt.Data.TryGetProperty("guild_folders", out _) || evt.Data.TryGetProperty("guild_positions", out _))
@@ -346,6 +355,29 @@ public sealed class DiscordClient : IAsyncDisposable
                 var dict = _guildMembers.GetOrAdd(guildId, _ => new ConcurrentDictionary<string, DiscordUser>());
                 dict[user.Id] = user;
             }
+
+            // Mettre à jour immédiatement le participant s'il est déjà connecté en vocal
+            foreach (var (chId, participants) in _voiceChannelMembers)
+            {
+                if (participants.TryGetValue(user.Id, out var voiceUser))
+                {
+                    App.RunOnUiThread(() =>
+                    {
+                        voiceUser.Username = user.Username;
+                        voiceUser.GlobalName = user.GlobalName;
+                        voiceUser.Discriminator = user.Discriminator;
+                        voiceUser.Avatar = user.Avatar;
+                        if (!string.IsNullOrEmpty(user.ServerNick)) voiceUser.ServerNick = user.ServerNick;
+                        if (!string.IsNullOrEmpty(user.ServerAvatar))
+                        {
+                            voiceUser.ServerAvatar = user.ServerAvatar;
+                            voiceUser.GuildIdForAvatar = guildId;
+                        }
+                        voiceUser.NotifyProfileChanged();
+                    });
+                    VoiceParticipantsChanged?.Invoke(chId);
+                }
+            }
         }
         catch { }
     }
@@ -359,6 +391,44 @@ public sealed class DiscordClient : IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    private void HandleReadySupplemental(JsonElement data)
+    {
+        try
+        {
+            if (data.TryGetProperty("merged_members", out var mmEl) && mmEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var innerList in mmEl.EnumerateArray())
+                {
+                    if (innerList.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var mEl in innerList.EnumerateArray())
+                        {
+                            CacheGuildMember(null, mEl);
+                        }
+                    }
+                }
+            }
+
+            if (data.TryGetProperty("guilds", out var guildsEl) && guildsEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var gEl in guildsEl.EnumerateArray())
+                {
+                    var gid = gEl.TryGetProperty("id", out var gidProp) ? gidProp.GetString() : null;
+                    if (string.IsNullOrEmpty(gid)) continue;
+
+                    if (gEl.TryGetProperty("voice_states", out var vsArr) && vsArr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var vs in vsArr.EnumerateArray())
+                        {
+                            HandleVoiceStateUpdate(vs, gid);
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+
     private void HandleVoiceStateUpdate(JsonElement data, string? fallbackGuildId = null)
     {
         try
@@ -369,6 +439,17 @@ public sealed class DiscordClient : IAsyncDisposable
             var guildId = data.TryGetProperty("guild_id", out var gidEl) && gidEl.ValueKind == JsonValueKind.String ? gidEl.GetString() : fallbackGuildId;
 
             if (string.IsNullOrWhiteSpace(userId)) return;
+
+            if (string.IsNullOrEmpty(guildId) && !string.IsNullOrEmpty(channelId) && _channelToGuildMap.TryGetValue(channelId, out var mappedGid))
+            {
+                guildId = mappedGid;
+            }
+
+            if (!string.IsNullOrEmpty(channelId) && !string.IsNullOrEmpty(guildId))
+            {
+                _channelToGuildMap[channelId] = guildId;
+                _guildVoiceChannels.GetOrAdd(guildId, _ => new ConcurrentDictionary<string, byte>())[channelId] = 0;
+            }
 
             if (userId == CurrentUser?.Id && !string.IsNullOrWhiteSpace(sessionId))
             {
@@ -415,6 +496,16 @@ public sealed class DiscordClient : IAsyncDisposable
                 userObj = Friends.Select(f => f.User).FirstOrDefault(u => u.Id == userId);
             }
 
+            // 5b. Destinataires DM / Group DM
+            if (userObj == null && !string.IsNullOrEmpty(channelId))
+            {
+                var dmChan = PrivateChannels.FirstOrDefault(c => c.Id == channelId);
+                if (dmChan?.Recipients != null)
+                {
+                    userObj = dmChan.Recipients.FirstOrDefault(r => r.Id == userId);
+                }
+            }
+
             bool needsResolution = false;
             // 6. Fallback si inconnu
             if (userObj == null)
@@ -450,10 +541,19 @@ public sealed class DiscordClient : IAsyncDisposable
                     if (kvp.Value.TryRemove(userId!, out _))
                     {
                         VoiceParticipantsChanged?.Invoke(kvp.Key);
-                        var oldGuild = Guilds.FirstOrDefault(g => g.Channels.Any(c => c.Id == kvp.Key));
-                        if (oldGuild != null)
+                        string? oldGuildId = null;
+                        if (_channelToGuildMap.TryGetValue(kvp.Key, out var ogId))
                         {
-                            UpdateGuildVoiceAndStreamStatus(oldGuild.Id);
+                            oldGuildId = ogId;
+                        }
+                        else
+                        {
+                            var oldGuild = Guilds.FirstOrDefault(g => g.Channels.Any(c => c.Id == kvp.Key));
+                            if (oldGuild != null) oldGuildId = oldGuild.Id;
+                        }
+                        if (!string.IsNullOrEmpty(oldGuildId))
+                        {
+                            UpdateGuildVoiceAndStreamStatus(oldGuildId);
                         }
                     }
                 }
@@ -485,44 +585,59 @@ public sealed class DiscordClient : IAsyncDisposable
     {
         try
         {
-            DiscordUser? resolved = null;
-            if (!string.IsNullOrEmpty(guildId))
+            // 1. D'abord vérifier le cache serveur ou global s'il s'est mis à jour
+            if (!string.IsNullOrEmpty(guildId) && _guildMembers.TryGetValue(guildId, out var gDict) && gDict.TryGetValue(userId, out var cachedInGuild))
             {
-                resolved = await Rest.GetGuildMemberAsync(guildId, userId);
+                if (!cachedInGuild.Username.StartsWith("Utilisateur ") || !string.IsNullOrEmpty(cachedInGuild.GlobalName))
+                {
+                    ApplyResolvedUser(placeholderUser, cachedInGuild, guildId, channelId);
+                    return;
+                }
             }
-            if (resolved == null)
+            if (_userCache.TryGetValue(userId, out var cachedUser))
             {
-                resolved = await Rest.GetUserAsync(userId);
+                if (!cachedUser.Username.StartsWith("Utilisateur ") || !string.IsNullOrEmpty(cachedUser.GlobalName))
+                {
+                    ApplyResolvedUser(placeholderUser, cachedUser, guildId, channelId);
+                    return;
+                }
             }
 
+            // 2. Appel API Discord User Client (/users/{userId}/profile?guild_id={guildId})
+            var resolved = await Rest.GetUserProfileUserAsync(userId, guildId);
             if (resolved != null && !string.IsNullOrEmpty(resolved.Username))
             {
-                App.RunOnUiThread(() =>
-                {
-                    placeholderUser.Username = resolved.Username;
-                    placeholderUser.GlobalName = resolved.GlobalName;
-                    placeholderUser.Discriminator = resolved.Discriminator;
-                    placeholderUser.Avatar = resolved.Avatar;
-                    placeholderUser.ServerNick = resolved.ServerNick;
-                    placeholderUser.ServerAvatar = resolved.ServerAvatar;
-                    placeholderUser.GuildIdForAvatar = resolved.GuildIdForAvatar ?? guildId;
-                    placeholderUser.NotifyProfileChanged();
-                });
-
-                _userCache[userId] = placeholderUser;
-                if (!string.IsNullOrEmpty(guildId))
-                {
-                    var gm = _guildMembers.GetOrAdd(guildId, _ => new ConcurrentDictionary<string, DiscordUser>());
-                    gm[userId] = placeholderUser;
-                }
-
-                VoiceParticipantsChanged?.Invoke(channelId);
+                ApplyResolvedUser(placeholderUser, resolved, guildId, channelId);
             }
         }
         catch { }
     }
 
-    private void UpdateGuildVoiceAndStreamStatus(string? guildId)
+    private void ApplyResolvedUser(DiscordUser placeholderUser, DiscordUser resolved, string? guildId, string channelId)
+    {
+        App.RunOnUiThread(() =>
+        {
+            placeholderUser.Username = resolved.Username;
+            placeholderUser.GlobalName = resolved.GlobalName;
+            placeholderUser.Discriminator = resolved.Discriminator;
+            placeholderUser.Avatar = resolved.Avatar;
+            placeholderUser.ServerNick = resolved.ServerNick;
+            placeholderUser.ServerAvatar = resolved.ServerAvatar;
+            placeholderUser.GuildIdForAvatar = resolved.GuildIdForAvatar ?? guildId;
+            placeholderUser.NotifyProfileChanged();
+        });
+
+        _userCache[resolved.Id] = placeholderUser;
+        if (!string.IsNullOrEmpty(guildId))
+        {
+            var gm = _guildMembers.GetOrAdd(guildId, _ => new ConcurrentDictionary<string, DiscordUser>());
+            gm[resolved.Id] = placeholderUser;
+        }
+
+        VoiceParticipantsChanged?.Invoke(channelId);
+    }
+
+    public void UpdateGuildVoiceAndStreamStatus(string? guildId)
     {
         if (string.IsNullOrEmpty(guildId)) return;
         App.RunOnUiThread(() =>
@@ -533,6 +648,23 @@ public sealed class DiscordClient : IAsyncDisposable
             bool hasVoice = false;
             bool hasStream = false;
 
+            // 1. Vérifier tous les salons vocaux connus associés à ce serveur
+            if (_guildVoiceChannels.TryGetValue(guildId, out var voiceChans))
+            {
+                foreach (var chId in voiceChans.Keys)
+                {
+                    if (_voiceChannelMembers.TryGetValue(chId, out var dict) && dict.Count > 0)
+                    {
+                        hasVoice = true;
+                        if (dict.Values.Any(u => u.IsStreaming))
+                        {
+                            hasStream = true;
+                        }
+                    }
+                }
+            }
+
+            // 2. Vérifier aussi dans guild.Channels si déjà chargé
             if (guild.Channels != null)
             {
                 foreach (var ch in guild.Channels.Where(c => c.IsVoiceChannel))
@@ -551,6 +683,12 @@ public sealed class DiscordClient : IAsyncDisposable
             guild.HasVoiceActivity = hasVoice;
             guild.HasStreamActivity = hasStream;
         });
+    }
+
+    public void RegisterGuildVoiceChannel(string guildId, string channelId)
+    {
+        _channelToGuildMap[channelId] = guildId;
+        _guildVoiceChannels.GetOrAdd(guildId, _ => new ConcurrentDictionary<string, byte>())[channelId] = 0;
     }
 
     private void HandleMessageCreateForMentions(DiscordMessage message)
@@ -1192,7 +1330,7 @@ public sealed class DiscordClient : IAsyncDisposable
         }
     }
 
-    public async Task JoinVoiceChannelAsync(string guildId, string? channelId, bool mute = false, bool deaf = false, bool selfVideo = false, bool selfStream = false)
+    public async Task JoinVoiceChannelAsync(string? guildId, string? channelId, bool mute = false, bool deaf = false, bool selfVideo = false, bool selfStream = false)
     {
         bool wasStreaming = _voiceStream;
         _voiceMuted = mute;
@@ -1240,7 +1378,10 @@ public sealed class DiscordClient : IAsyncDisposable
                 }
                 else if (!selfStream && wasStreaming)
                 {
-                    await _gateway.SendStreamDeleteAsync($"guild:{guildId}:{channelId}:{CurrentUser.Id}");
+                    var streamKey = string.IsNullOrEmpty(guildId)
+                        ? $"call:{channelId}:{CurrentUser.Id}"
+                        : $"guild:{guildId}:{channelId}:{CurrentUser.Id}";
+                    await _gateway.SendStreamDeleteAsync(streamKey);
                 }
             }
         }
@@ -1274,11 +1415,14 @@ public sealed class DiscordClient : IAsyncDisposable
             _voiceClient = null;
         }
 
-        if (_gateway is not null && !string.IsNullOrEmpty(guildId))
+        if (_gateway is not null)
         {
             if (wasStreaming && !string.IsNullOrEmpty(channelId) && CurrentUser is not null)
             {
-                try { await _gateway.SendStreamDeleteAsync($"guild:{guildId}:{channelId}:{CurrentUser.Id}"); } catch { }
+                var streamKey = string.IsNullOrEmpty(guildId)
+                    ? $"call:{channelId}:{CurrentUser.Id}"
+                    : $"guild:{guildId}:{channelId}:{CurrentUser.Id}";
+                try { await _gateway.SendStreamDeleteAsync(streamKey); } catch { }
             }
             await _gateway.SendVoiceStateUpdateAsync(guildId, null, _voiceMuted, _voiceDeafened, false, false);
         }
@@ -1287,7 +1431,7 @@ public sealed class DiscordClient : IAsyncDisposable
     public async Task StartScreenShareAsync(bool shareSystemAudio = true)
     {
         IsSystemAudioSharingEnabled = shareSystemAudio;
-        if (_pendingVoiceGuildId is not null && _pendingVoiceChannelId is not null)
+        if (_pendingVoiceChannelId is not null)
         {
             await JoinVoiceChannelAsync(_pendingVoiceGuildId, _pendingVoiceChannelId, _voiceMuted, _voiceDeafened, _voiceVideo, selfStream: true);
         }
@@ -1296,7 +1440,7 @@ public sealed class DiscordClient : IAsyncDisposable
     public async Task StopScreenShareAsync()
     {
         IsSystemAudioSharingEnabled = false;
-        if (_pendingVoiceGuildId is not null && _pendingVoiceChannelId is not null)
+        if (_pendingVoiceChannelId is not null)
         {
             await JoinVoiceChannelAsync(_pendingVoiceGuildId, _pendingVoiceChannelId, _voiceMuted, _voiceDeafened, _voiceVideo, selfStream: false);
         }
@@ -1304,7 +1448,7 @@ public sealed class DiscordClient : IAsyncDisposable
 
     public async Task ToggleVideoAsync(bool enabled)
     {
-        if (_pendingVoiceGuildId is not null && _pendingVoiceChannelId is not null)
+        if (_pendingVoiceChannelId is not null)
         {
             await JoinVoiceChannelAsync(_pendingVoiceGuildId, _pendingVoiceChannelId, _voiceMuted, _voiceDeafened, selfVideo: enabled, _voiceStream);
         }

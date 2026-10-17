@@ -500,22 +500,10 @@ public sealed partial class MainViewModel : ObservableObject
         // Demander à la Gateway de s'abonner au serveur (Opcode 14) pour recevoir les mises à jour vocales et les membres en temps réel
         _ = _client.SubscribeGuildAsync(guild.Id);
 
+        List<DiscordChannel> rawChannels;
         if (guild.Channels.Count > 0)
         {
-            foreach (var channel in guild.Channels.Where(c => c.IsTextLike || c.Type == DiscordChannelType.GuildVoice).OrderBy(c => c.Position))
-            {
-                channel.GuildId ??= guild.Id;
-                if (!string.IsNullOrEmpty(channel.LastMessageId) && _client.ReadLastMessages.TryGetValue(channel.Id, out var rMid))
-                {
-                    if (ulong.TryParse(channel.LastMessageId, out var cMid) &&
-                        ulong.TryParse(rMid, out var readMid) &&
-                        cMid > readMid)
-                    {
-                        channel.HasUnread = true;
-                    }
-                }
-                Channels.Add(channel);
-            }
+            rawChannels = guild.Channels;
         }
         else
         {
@@ -523,27 +511,54 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 var fetchedChannels = await _client.Rest.GetGuildChannelsAsync(guild.Id);
                 guild.Channels = fetchedChannels;
-                foreach (var channel in fetchedChannels.Where(c => c.IsTextLike || c.Type == DiscordChannelType.GuildVoice).OrderBy(c => c.Position))
-                {
-                    channel.GuildId ??= guild.Id;
-                    if (!string.IsNullOrEmpty(channel.LastMessageId) && _client.ReadLastMessages.TryGetValue(channel.Id, out var rMid))
-                    {
-                        if (ulong.TryParse(channel.LastMessageId, out var cMid) &&
-                            ulong.TryParse(rMid, out var readMid) &&
-                            cMid > readMid)
-                        {
-                            channel.HasUnread = true;
-                        }
-                    }
-                    Channels.Add(channel);
-                }
+                rawChannels = fetchedChannels;
             }
             catch (Exception ex)
             {
                 System.IO.File.AppendAllText(
                     System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DiscordNative_crash.log"),
                     $"[{DateTime.Now}] GetGuildChannelsAsync failed: {ex}\n\n");
+                rawChannels = new List<DiscordChannel>();
             }
+        }
+
+        foreach (var ch in rawChannels.Where(c => c.IsVoiceChannel))
+        {
+            _client.RegisterGuildVoiceChannel(guild.Id, ch.Id);
+        }
+        _client.UpdateGuildVoiceAndStreamStatus(guild.Id);
+
+        // Trier logiquement : salons texte d'abord, puis salons vocaux (groupés par catégorie si applicable)
+        var categories = rawChannels.Where(c => c.Type == DiscordChannelType.GuildCategory).ToDictionary(c => c.Id, c => c.Position);
+
+        int GetCategoryPos(DiscordChannel ch)
+        {
+            if (!string.IsNullOrEmpty(ch.ParentId) && categories.TryGetValue(ch.ParentId, out var pos))
+                return pos;
+            return -1;
+        }
+
+        int GetTypeOrder(DiscordChannel ch) => ch.IsVoiceChannel ? 1 : 0;
+
+        var sortedChannels = rawChannels
+            .Where(c => c.IsTextLike || c.IsVoiceChannel)
+            .OrderBy(c => GetCategoryPos(c))
+            .ThenBy(c => GetTypeOrder(c))
+            .ThenBy(c => c.Position);
+
+        foreach (var channel in sortedChannels)
+        {
+            channel.GuildId ??= guild.Id;
+            if (!string.IsNullOrEmpty(channel.LastMessageId) && _client.ReadLastMessages.TryGetValue(channel.Id, out var rMid))
+            {
+                if (ulong.TryParse(channel.LastMessageId, out var cMid) &&
+                    ulong.TryParse(rMid, out var readMid) &&
+                    cMid > readMid)
+                {
+                    channel.HasUnread = true;
+                }
+            }
+            Channels.Add(channel);
         }
 
         foreach (var ch in Channels.Where(c => c.IsVoiceChannel))
