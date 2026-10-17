@@ -67,6 +67,44 @@ public sealed class DiscordChannel : INotifyPropertyChanged
     [JsonIgnore]
     public bool HasConnectedVoiceMembers => ConnectedVoiceMembers.Count > 0;
 
+    private int _mentionCount;
+    [JsonIgnore]
+    public int MentionCount
+    {
+        get => _mentionCount;
+        set
+        {
+            if (_mentionCount != value)
+            {
+                _mentionCount = Math.Max(0, value);
+                OnPropertyChanged(nameof(MentionCount));
+                OnPropertyChanged(nameof(HasMentions));
+                OnPropertyChanged(nameof(MentionCountText));
+            }
+        }
+    }
+
+    [JsonIgnore]
+    public bool HasMentions => _mentionCount > 0;
+
+    [JsonIgnore]
+    public string MentionCountText => _mentionCount > 99 ? "99+" : _mentionCount.ToString();
+
+    private bool _hasUnread;
+    [JsonIgnore]
+    public bool HasUnread
+    {
+        get => _hasUnread;
+        set
+        {
+            if (_hasUnread != value)
+            {
+                _hasUnread = value;
+                OnPropertyChanged(nameof(HasUnread));
+            }
+        }
+    }
+
     public void NotifyVoiceMembersChanged()
     {
         OnPropertyChanged(nameof(ConnectedVoiceMembers));

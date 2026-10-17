@@ -46,6 +46,12 @@ public sealed class DiscordMessage
     [JsonPropertyName("mentions")]
     public List<DiscordUser> Mentions { get; set; } = new();
 
+    [JsonPropertyName("mention_everyone")]
+    public bool MentionEveryone { get; set; }
+
+    [JsonPropertyName("mention_roles")]
+    public List<string> MentionRoles { get; set; } = new();
+
     [JsonPropertyName("referenced_message")]
     public DiscordMessage? ReferencedMessage { get; set; }
 

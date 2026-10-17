@@ -227,6 +227,17 @@ public sealed partial class MainViewModel : ObservableObject
     public Microsoft.UI.Xaml.Visibility ShowingGuildChannels => _showingFriends ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
     public Microsoft.UI.Xaml.Visibility ShowingFriendsView => _showingFriends ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
+    public int TotalDmMentionCount => _client.PrivateChannels.Sum(c => c.MentionCount);
+    public bool HasDmMentions => TotalDmMentionCount > 0;
+    public string DmMentionCountText => TotalDmMentionCount > 99 ? "99+" : TotalDmMentionCount.ToString();
+
+    public void NotifyDmMentionsChanged()
+    {
+        OnPropertyChanged(nameof(TotalDmMentionCount));
+        OnPropertyChanged(nameof(HasDmMentions));
+        OnPropertyChanged(nameof(DmMentionCountText));
+    }
+
     private readonly Microsoft.UI.Xaml.DispatcherTimer _rpcTickerTimer = new();
 
     public MainViewModel(DiscordClient client)
@@ -458,6 +469,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     public void ShowFriendsView()
     {
+        if (_selectedGuild != null)
+        {
+            _selectedGuild.IsSelected = false;
+            _selectedGuild = null;
+        }
+        _client.ActiveGuildId = null;
         _showingFriends = true;
         SelectedGuildName = "Amis & Messages Privés";
         OnPropertyChanged(nameof(ShowingGuildChannels));
@@ -467,10 +484,16 @@ public sealed partial class MainViewModel : ObservableObject
 
     public async Task SelectGuildAsync(DiscordGuild guild)
     {
+        if (_selectedGuild != null && _selectedGuild != guild)
+        {
+            _selectedGuild.IsSelected = false;
+        }
         _showingFriends = false;
         OnPropertyChanged(nameof(ShowingGuildChannels));
         OnPropertyChanged(nameof(ShowingFriendsView));
         _selectedGuild = guild;
+        guild.IsSelected = true;
+        _client.ActiveGuildId = guild.Id;
         SelectedGuildName = guild.Name;
         Channels.Clear();
 
@@ -517,6 +540,16 @@ public sealed partial class MainViewModel : ObservableObject
     public async Task SelectChannelAsync(DiscordChannel channel)
     {
         _selectedChannel = channel;
+        _client.ActiveChannelId = channel.Id;
+        channel.MentionCount = 0;
+        channel.HasUnread = false;
+
+        if (_selectedGuild != null && _selectedGuild.MentionCount > 0)
+        {
+            _selectedGuild.MentionCount = Math.Max(0, _selectedGuild.MentionCount - 1);
+        }
+        NotifyDmMentionsChanged();
+
         SelectedChannelName = channel.DisplayName;
         SelectedChannelTopic = channel.Topic ?? string.Empty;
         OnPropertyChanged(nameof(TopicVisibility));

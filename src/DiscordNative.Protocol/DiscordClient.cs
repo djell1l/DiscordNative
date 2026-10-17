@@ -82,6 +82,9 @@ public sealed class DiscordClient : IAsyncDisposable
     public ObservableCollection<DiscordChannel> PrivateChannels { get; } = new();
     public ObservableCollection<DiscordRelationship> Friends { get; } = new();
 
+    public string? ActiveChannelId { get; set; }
+    public string? ActiveGuildId { get; set; }
+
     public event Action<DiscordMessage>? MessageReceived;
     public event Action<DiscordMessage>? MessageUpdated;
     public event Action<string, string>? MessageDeleted; // channelId, messageId
@@ -192,7 +195,17 @@ public sealed class DiscordClient : IAsyncDisposable
                 break;
             case "MESSAGE_CREATE":
                 var message = evt.Data.Deserialize<DiscordMessage>(JsonOptions);
-                if (message is not null) MessageReceived?.Invoke(message);
+                if (message is not null)
+                {
+                    HandleMessageCreateForMentions(message);
+                    MessageReceived?.Invoke(message);
+                }
+                break;
+            case "MESSAGE_ACK":
+                if (evt.Data.TryGetProperty("channel_id", out var ackChEl) && ackChEl.ValueKind == JsonValueKind.String)
+                {
+                    HandleMessageAck(ackChEl.GetString());
+                }
                 break;
             case "MESSAGE_UPDATE":
                 var updatedMsg = evt.Data.Deserialize<DiscordMessage>(JsonOptions);
@@ -320,6 +333,11 @@ public sealed class DiscordClient : IAsyncDisposable
                 user.GuildIdForAvatar = guildId;
             }
 
+            if (memberEl.TryGetProperty("roles", out var rolesEl) && rolesEl.ValueKind == JsonValueKind.Array)
+            {
+                user.Roles = rolesEl.EnumerateArray().Select(r => r.GetString() ?? "").Where(r => !string.IsNullOrEmpty(r)).ToList();
+            }
+
             _userCache[user.Id] = user;
 
             if (!string.IsNullOrEmpty(guildId))
@@ -431,6 +449,11 @@ public sealed class DiscordClient : IAsyncDisposable
                     if (kvp.Value.TryRemove(userId!, out _))
                     {
                         VoiceParticipantsChanged?.Invoke(kvp.Key);
+                        var oldGuild = Guilds.FirstOrDefault(g => g.Channels.Any(c => c.Id == kvp.Key));
+                        if (oldGuild != null)
+                        {
+                            UpdateGuildVoiceAndStreamStatus(oldGuild.Id);
+                        }
                     }
                 }
             }
@@ -442,10 +465,16 @@ public sealed class DiscordClient : IAsyncDisposable
                 dict[userId!] = userObj;
                 VoiceParticipantsChanged?.Invoke(channelId!);
 
+                UpdateGuildVoiceAndStreamStatus(guildId);
+
                 if (needsResolution)
                 {
                     _ = ResolveVoiceParticipantProfileAsync(guildId, channelId!, userId!, userObj);
                 }
+            }
+            else if (!string.IsNullOrEmpty(guildId))
+            {
+                UpdateGuildVoiceAndStreamStatus(guildId);
             }
         }
         catch { }
@@ -490,6 +519,141 @@ public sealed class DiscordClient : IAsyncDisposable
             }
         }
         catch { }
+    }
+
+    private void UpdateGuildVoiceAndStreamStatus(string? guildId)
+    {
+        if (string.IsNullOrEmpty(guildId)) return;
+        App.RunOnUiThread(() =>
+        {
+            var guild = Guilds.FirstOrDefault(g => g.Id == guildId);
+            if (guild == null) return;
+
+            bool hasVoice = false;
+            bool hasStream = false;
+
+            if (guild.Channels != null)
+            {
+                foreach (var ch in guild.Channels.Where(c => c.IsVoiceChannel))
+                {
+                    if (_voiceChannelMembers.TryGetValue(ch.Id, out var dict) && dict.Count > 0)
+                    {
+                        hasVoice = true;
+                        if (dict.Values.Any(u => u.IsStreaming))
+                        {
+                            hasStream = true;
+                        }
+                    }
+                }
+            }
+
+            guild.HasVoiceActivity = hasVoice;
+            guild.HasStreamActivity = hasStream;
+        });
+    }
+
+    private void HandleMessageCreateForMentions(DiscordMessage message)
+    {
+        try
+        {
+            if (message.Author?.Id == CurrentUser?.Id) return;
+            if (!string.IsNullOrEmpty(ActiveChannelId) && message.ChannelId == ActiveChannelId) return;
+
+            string? guildId = message.GuildId;
+            DiscordGuild? targetGuild = null;
+
+            if (!string.IsNullOrEmpty(guildId))
+            {
+                targetGuild = Guilds.FirstOrDefault(g => g.Id == guildId);
+            }
+            else
+            {
+                targetGuild = Guilds.FirstOrDefault(g => g.Channels.Any(c => c.Id == message.ChannelId));
+            }
+
+            if (targetGuild != null)
+            {
+                bool isMentioned = false;
+                if (CurrentUser != null)
+                {
+                    if (message.MentionEveryone)
+                    {
+                        isMentioned = true;
+                    }
+                    else if (message.Mentions != null && message.Mentions.Any(u => u.Id == CurrentUser.Id))
+                    {
+                        isMentioned = true;
+                    }
+                    else if (!string.IsNullOrEmpty(message.Content) &&
+                             (message.Content.Contains($"<@{CurrentUser.Id}>") || message.Content.Contains($"<@!{CurrentUser.Id}>")))
+                    {
+                        isMentioned = true;
+                    }
+                    else if (message.MentionRoles != null && message.MentionRoles.Count > 0)
+                    {
+                        if (_guildMembers.TryGetValue(targetGuild.Id, out var gDict) &&
+                            gDict.TryGetValue(CurrentUser.Id, out var mUser) &&
+                            mUser.Roles != null &&
+                            message.MentionRoles.Any(r => mUser.Roles.Contains(r)))
+                        {
+                            isMentioned = true;
+                        }
+                    }
+                }
+
+                App.RunOnUiThread(() =>
+                {
+                    if (isMentioned)
+                    {
+                        targetGuild.MentionCount++;
+                    }
+                    targetGuild.HasUnread = true;
+                });
+            }
+            else
+            {
+                // Private channel (DM / Group DM)
+                App.RunOnUiThread(() =>
+                {
+                    var dm = PrivateChannels.FirstOrDefault(c => c.Id == message.ChannelId);
+                    if (dm != null)
+                    {
+                        dm.MentionCount++;
+                        dm.HasUnread = true;
+                    }
+                });
+            }
+        }
+        catch { }
+    }
+
+    private void HandleMessageAck(string? channelId)
+    {
+        if (string.IsNullOrEmpty(channelId)) return;
+        App.RunOnUiThread(() =>
+        {
+            var targetGuild = Guilds.FirstOrDefault(g => g.Channels.Any(c => c.Id == channelId));
+            if (targetGuild != null)
+            {
+                if (targetGuild.MentionCount > 0)
+                {
+                    targetGuild.MentionCount--;
+                }
+                if (targetGuild.MentionCount == 0)
+                {
+                    targetGuild.HasUnread = false;
+                }
+            }
+            else
+            {
+                var dm = PrivateChannels.FirstOrDefault(c => c.Id == channelId);
+                if (dm != null)
+                {
+                    dm.MentionCount = 0;
+                    dm.HasUnread = false;
+                }
+            }
+        });
     }
 
     private void HandleVoiceServerUpdate(JsonElement data)
@@ -619,10 +783,31 @@ public sealed class DiscordClient : IAsyncDisposable
                         HandlePresenceUpdate(pEl);
                     }
                 }
+                if (gEl.TryGetProperty("threads", out var threadsEl) && threadsEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var tEl in threadsEl.EnumerateArray())
+                    {
+                        if (tEl.TryGetProperty("member", out var tmEl) &&
+                            tmEl.TryGetProperty("mention_count", out var mcEl) &&
+                            mcEl.TryGetInt32(out var mc) && mc > 0)
+                        {
+                            g.MentionCount += mc;
+                            g.HasUnread = true;
+                        }
+                    }
+                }
                 if (gEl.TryGetProperty("voice_states", out var vsArray) && vsArray.ValueKind == JsonValueKind.Array)
                 {
+                    if (vsArray.GetArrayLength() > 0)
+                    {
+                        g.HasVoiceActivity = true;
+                    }
                     foreach (var vs in vsArray.EnumerateArray())
                     {
+                        if (vs.TryGetProperty("self_stream", out var streamProp) && streamProp.ValueKind == JsonValueKind.True)
+                        {
+                            g.HasStreamActivity = true;
+                        }
                         HandleVoiceStateUpdate(vs, g.Id);
                     }
                 }
@@ -630,6 +815,77 @@ public sealed class DiscordClient : IAsyncDisposable
                 {
                     validGuilds.Add(g);
                 }
+            }
+
+            if (data.TryGetProperty("read_state", out var readStateEl))
+            {
+                try
+                {
+                    var entries = readStateEl;
+                    if (readStateEl.ValueKind == JsonValueKind.Object && readStateEl.TryGetProperty("entries", out var innerEntries))
+                    {
+                        entries = innerEntries;
+                    }
+
+                    if (entries.ValueKind == JsonValueKind.Array)
+                    {
+                        var channelMentions = new Dictionary<string, int>();
+                        var unreadChannels = new HashSet<string>();
+
+                        foreach (var entry in entries.EnumerateArray())
+                        {
+                            if (entry.TryGetProperty("id", out var chIdEl) && chIdEl.ValueKind == JsonValueKind.String)
+                            {
+                                var chId = chIdEl.GetString()!;
+                                int mc = 0;
+                                if (entry.TryGetProperty("mention_count", out var mcProp) && mcProp.TryGetInt32(out var countVal))
+                                {
+                                    mc = countVal;
+                                }
+                                else if (entry.TryGetProperty("badge", out var badgeProp) && badgeProp.TryGetInt32(out var badgeVal))
+                                {
+                                    mc = badgeVal;
+                                }
+
+                                if (mc > 0)
+                                {
+                                    channelMentions[chId] = mc;
+                                    unreadChannels.Add(chId);
+                                }
+                            }
+                        }
+
+                        foreach (var g in validGuilds)
+                        {
+                            int totalMentions = 0;
+                            bool hasUnread = false;
+                            if (g.Channels != null)
+                            {
+                                foreach (var ch in g.Channels)
+                                {
+                                    if (channelMentions.TryGetValue(ch.Id, out var count))
+                                    {
+                                        totalMentions += count;
+                                    }
+                                    if (unreadChannels.Contains(ch.Id))
+                                    {
+                                        hasUnread = true;
+                                    }
+                                }
+                            }
+                            if (totalMentions > 0)
+                            {
+                                g.MentionCount += totalMentions;
+                                g.HasUnread = true;
+                            }
+                            else if (hasUnread)
+                            {
+                                g.HasUnread = true;
+                            }
+                        }
+                    }
+                }
+                catch { }
             }
 
             if (validGuilds.Count > 0)
@@ -878,7 +1134,23 @@ public sealed class DiscordClient : IAsyncDisposable
 
             if (existingIdx >= 0)
             {
-                Guilds[existingIdx] = targetGuild;
+                var existing = Guilds[existingIdx];
+                existing.Name = targetGuild.Name;
+                existing.Icon = targetGuild.Icon;
+                existing.OwnerId = targetGuild.OwnerId;
+                if (targetGuild.Channels != null && targetGuild.Channels.Count > 0)
+                {
+                    existing.Channels = targetGuild.Channels;
+                }
+                if (targetGuild.Roles != null && targetGuild.Roles.Count > 0)
+                {
+                    existing.Roles = targetGuild.Roles;
+                }
+                if (targetGuild.MentionCount > 0) existing.MentionCount = targetGuild.MentionCount;
+                if (targetGuild.HasUnread) existing.HasUnread = true;
+                if (targetGuild.HasVoiceActivity) existing.HasVoiceActivity = true;
+                if (targetGuild.HasStreamActivity) existing.HasStreamActivity = true;
+
                 if (existingIdx != targetIdx)
                 {
                     Guilds.Move(existingIdx, targetIdx);

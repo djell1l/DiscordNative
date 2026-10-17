@@ -76,11 +76,24 @@
 
                         <Button Margin="12,12,12,4" Width="48" Height="48" CornerRadius="16" Padding="0"
                                 Click="OnFriendsClicked" ToolTipService.ToolTip="Amis et messages privés">
-                            <Border Width="48" Height="48" CornerRadius="16">
-                                <Border.Background>
-                                    <ImageBrush ImageSource="ms-appx:///Assets/AppIcon.png" Stretch="UniformToFill" />
-                                </Border.Background>
-                            </Border>
+                            <Grid Width="48" Height="48">
+                                <Border Width="48" Height="48" CornerRadius="16">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="ms-appx:///Assets/AppIcon.png" Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+                                <!-- Badge de notification DMs non lus en bas à droite -->
+                                <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                        Margin="0,0,-4,-4"
+                                        Background="#DA373C"
+                                        BorderBrush="#1E1F22" BorderThickness="3"
+                                        CornerRadius="9" MinWidth="18" Height="18" Padding="4,0"
+                                        Visibility="{x:Bind ViewModel.HasDmMentions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="{x:Bind ViewModel.DmMentionCountText, Mode=OneWay}"
+                                               Foreground="White" FontSize="11" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
                         </Button>
                     </StackPanel>
 
@@ -94,15 +107,15 @@
                                 <Setter Property="Padding" Value="0" />
                                 <Setter Property="Margin" Value="0,0,0,8" />
                                 <Setter Property="MinHeight" Value="48" />
-                                <Setter Property="MinWidth" Value="48" />
-                                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                                <Setter Property="MinWidth" Value="72" />
+                                <Setter Property="Width" Value="72" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                 <Setter Property="VerticalContentAlignment" Value="Center" />
-                                <Setter Property="CornerRadius" Value="16" />
                             </Style>
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="models:DiscordGuild">
-                                <Grid Width="48" Height="48" ToolTipService.ToolTip="{x:Bind Name}"
+                                <Grid Height="48" ToolTipService.ToolTip="{x:Bind Name}"
                                       PointerEntered="OnAvatarPointerEntered" PointerExited="OnAvatarPointerExited">
                                     <Grid.ContextFlyout>
                                         <MenuFlyout>
@@ -121,15 +134,60 @@
                                             </MenuFlyoutItem>
                                         </MenuFlyout>
                                     </Grid.ContextFlyout>
-                                    <Rectangle Fill="{ThemeResource ControlFillColorSecondaryBrush}" RadiusX="16" RadiusY="16" />
-                                    <Rectangle RadiusX="16" RadiusY="16" Visibility="{x:Bind HasIcon, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <Rectangle.Fill>
-                                            <ImageBrush ImageSource="{x:Bind IconUrl, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
-                                        </Rectangle.Fill>
-                                    </Rectangle>
-                                    <TextBlock Text="{x:Bind Initials}" HorizontalAlignment="Center"
-                                               Visibility="{x:Bind ShowInitials, Converter={StaticResource BoolToVisibilityConverter}}"
-                                               VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14" />
+
+                                    <!-- Pilule blanche sur le bord gauche (Non lu = petit point 8px, Sélectionné = barre 40px) -->
+                                    <Border HorizontalAlignment="Left" VerticalAlignment="Center"
+                                            Width="4" Height="{x:Bind IndicatorHeight, Mode=OneWay}"
+                                            CornerRadius="0,4,4,0" Background="White"
+                                            Visibility="{x:Bind HasUnreadOrSelected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                    <!-- Conteneur d'icône du serveur centré 48x48 -->
+                                    <Grid Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Rectangle Fill="{ThemeResource ControlFillColorSecondaryBrush}" RadiusX="16" RadiusY="16" />
+                                        <Rectangle RadiusX="16" RadiusY="16" Visibility="{x:Bind HasIcon, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <Rectangle.Fill>
+                                                <ImageBrush ImageSource="{x:Bind IconUrl, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
+                                            </Rectangle.Fill>
+                                        </Rectangle>
+                                        <TextBlock Text="{x:Bind Initials}" HorizontalAlignment="Center"
+                                                   Visibility="{x:Bind ShowInitials, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                   VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14" />
+
+                                        <!-- Badge Vocal en haut à droite (haut-parleur sur fond noir) -->
+                                        <Border HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                Margin="0,-3,-3,0"
+                                                Background="#111214"
+                                                BorderBrush="#1E1F22" BorderThickness="2"
+                                                CornerRadius="9" Width="18" Height="18"
+                                                Visibility="{x:Bind HasVoiceActivity, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                ToolTipService.ToolTip="Membres connectés en vocal">
+                                            <FontIcon Glyph="&#xE767;" FontSize="9" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+
+                                        <!-- Badge Stream en haut à droite (écran sur fond noir si pas de vocal) -->
+                                        <Border HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                Margin="0,-3,-3,0"
+                                                Background="#111214"
+                                                BorderBrush="#1E1F22" BorderThickness="2"
+                                                CornerRadius="9" Width="18" Height="18"
+                                                Visibility="{x:Bind HasStreamActivityAndNoVoice, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                ToolTipService.ToolTip="Partage d'écran en cours">
+                                            <FontIcon Glyph="&#xE7F4;" FontSize="9" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+
+                                        <!-- Badge Rouge de MENTION en bas à droite (exactement comme Discord officiel) -->
+                                        <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                Margin="0,0,-4,-4"
+                                                Background="#DA373C"
+                                                BorderBrush="#1E1F22" BorderThickness="3"
+                                                CornerRadius="9" MinWidth="18" Height="18" Padding="4,0"
+                                                Visibility="{x:Bind HasMentions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                ToolTipService.ToolTip="{x:Bind MentionTooltip, Mode=OneWay}">
+                                            <TextBlock Text="{x:Bind MentionCountText, Mode=OneWay}"
+                                                       Foreground="White" FontSize="11" FontWeight="Bold"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
@@ -199,6 +257,15 @@
                                             <FontIcon Glyph="{x:Bind Type, Converter={StaticResource ChannelTypeToGlyphConverter}}"
                                                       FontSize="14" Opacity="0.6" />
                                             <TextBlock Text="{x:Bind DisplayName}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+                                            <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                    Margin="6,0,0,0"
+                                                    Background="#DA373C"
+                                                    CornerRadius="8" MinWidth="16" Height="16" Padding="4,0"
+                                                    Visibility="{x:Bind HasMentions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBlock Text="{x:Bind MentionCountText, Mode=OneWay}"
+                                                           Foreground="White" FontSize="10" FontWeight="Bold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
                                         </StackPanel>
 
                                         <!-- Utilisateurs connectés dans ce salon vocal -->
@@ -279,6 +346,15 @@
                                                     </Ellipse>
                                                 </Grid>
                                                 <TextBlock Text="{x:Bind DisplayName}" VerticalAlignment="Center" />
+                                                <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                        Margin="8,0,0,0"
+                                                        Background="#DA373C"
+                                                        CornerRadius="8" MinWidth="16" Height="16" Padding="4,0"
+                                                        Visibility="{x:Bind HasMentions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TextBlock Text="{x:Bind MentionCountText, Mode=OneWay}"
+                                                               Foreground="White" FontSize="10" FontWeight="Bold"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
                                             </StackPanel>
                                         </DataTemplate>
                                     </ListView.ItemTemplate>

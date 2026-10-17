@@ -91,6 +91,9 @@ public sealed class DiscordUser : INotifyPropertyChanged
     [JsonPropertyName("accent_color")]
     public int? AccentColor { get; set; }
 
+    [JsonPropertyName("roles")]
+    public List<string> Roles { get; set; } = new();
+
     public List<int> ThemeColors { get; set; } = new();
     public bool HasCustomThemeColors => ThemeColors.Count >= 2;
 

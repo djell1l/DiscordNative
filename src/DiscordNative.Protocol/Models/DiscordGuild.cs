@@ -1,9 +1,13 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace DiscordNative.Protocol.Models;
 
-public sealed class DiscordGuild
+public sealed class DiscordGuild : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
 
@@ -51,6 +55,117 @@ public sealed class DiscordGuild
             };
         }
     }
+
+    // ---------- Propriétés de notification / mention / activité ----------
+
+    private int _mentionCount;
+    [JsonIgnore]
+    public int MentionCount
+    {
+        get => _mentionCount;
+        set
+        {
+            if (_mentionCount != value)
+            {
+                _mentionCount = Math.Max(0, value);
+                OnPropertyChanged(nameof(MentionCount));
+                OnPropertyChanged(nameof(HasMentions));
+                OnPropertyChanged(nameof(MentionCountText));
+                OnPropertyChanged(nameof(MentionTooltip));
+                OnPropertyChanged(nameof(IndicatorHeight));
+                OnPropertyChanged(nameof(HasUnreadOrSelected));
+            }
+        }
+    }
+
+    [JsonIgnore]
+    public bool HasMentions => _mentionCount > 0;
+
+    [JsonIgnore]
+    public string MentionCountText => _mentionCount > 99 ? "99+" : _mentionCount.ToString();
+
+    [JsonIgnore]
+    public string MentionTooltip => _mentionCount switch
+    {
+        <= 0 => string.Empty,
+        1 => "1 mention non lue",
+        _ => $"{_mentionCount} mentions non lues"
+    };
+
+    private bool _hasUnread;
+    [JsonIgnore]
+    public bool HasUnread
+    {
+        get => _hasUnread;
+        set
+        {
+            if (_hasUnread != value)
+            {
+                _hasUnread = value;
+                OnPropertyChanged(nameof(HasUnread));
+                OnPropertyChanged(nameof(IndicatorHeight));
+                OnPropertyChanged(nameof(HasUnreadOrSelected));
+            }
+        }
+    }
+
+    private bool _isSelected;
+    [JsonIgnore]
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected != value)
+            {
+                _isSelected = value;
+                OnPropertyChanged(nameof(IsSelected));
+                OnPropertyChanged(nameof(IndicatorHeight));
+                OnPropertyChanged(nameof(HasUnreadOrSelected));
+            }
+        }
+    }
+
+    [JsonIgnore]
+    public bool HasUnreadOrSelected => IsSelected || HasMentions || HasUnread;
+
+    [JsonIgnore]
+    public double IndicatorHeight => IsSelected ? 40 : (HasMentions || HasUnread ? 8 : 0);
+
+    private bool _hasVoiceActivity;
+    [JsonIgnore]
+    public bool HasVoiceActivity
+    {
+        get => _hasVoiceActivity;
+        set
+        {
+            if (_hasVoiceActivity != value)
+            {
+                _hasVoiceActivity = value;
+                OnPropertyChanged(nameof(HasVoiceActivity));
+                OnPropertyChanged(nameof(HasStreamActivityAndNoVoice));
+            }
+        }
+    }
+
+    private bool _hasStreamActivity;
+    [JsonIgnore]
+    public bool HasStreamActivity
+    {
+        get => _hasStreamActivity;
+        set
+        {
+            if (_hasStreamActivity != value)
+            {
+                _hasStreamActivity = value;
+                OnPropertyChanged(nameof(HasStreamActivity));
+                OnPropertyChanged(nameof(HasStreamActivityAndNoVoice));
+            }
+        }
+    }
+
+    [JsonIgnore]
+    public bool HasStreamActivityAndNoVoice => HasStreamActivity && !HasVoiceActivity;
 }
 
 public sealed class DiscordRole

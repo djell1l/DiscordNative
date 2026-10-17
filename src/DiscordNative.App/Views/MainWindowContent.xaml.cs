@@ -1394,6 +1394,12 @@ public sealed partial class MainWindowContent : UserControl
 
     private void OnMarkGuildReadClicked(object sender, RoutedEventArgs e)
     {
+        var g = GetGuildFromSender(sender);
+        if (g != null)
+        {
+            g.MentionCount = 0;
+            g.HasUnread = false;
+        }
     }
 
     private void OnCopyGuildNameClicked(object sender, RoutedEventArgs e)
