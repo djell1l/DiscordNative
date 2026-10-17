@@ -267,11 +267,17 @@
                                                     </MenuFlyoutItem>
                                                 </MenuFlyout>
                                             </StackPanel.ContextFlyout>
-                                            <!-- Icône Salon Texte (#) ou Salon Vocal (Haut-parleur) -->
+                                            <!-- Icône Salon Texte (#) ou Salon Vocal (Haut-parleur ou Cadenas si verrouillé) -->
                                             <Grid Width="16" Height="16" VerticalAlignment="Center">
+                                                <!-- Cadenas si salon vocal verrouillé -->
+                                                <FontIcon Glyph="&#xE72E;" FontSize="12" Foreground="#949BA4"
+                                                          Visibility="{x:Bind IsLocked, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                          ToolTipService.ToolTip="Salon verrouillé" />
+                                                <!-- Haut-parleur si salon vocal accessible -->
                                                 <FontIcon Glyph="&#xE767;" FontSize="13"
                                                           Foreground="{x:Bind VoiceSpeakerColorBrush, Mode=OneWay}"
-                                                          Visibility="{x:Bind IsVoiceChannel, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                          Visibility="{x:Bind ShowVoiceSpeakerIcon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                <!-- Dièse si salon texte -->
                                                 <TextBlock Text="#" FontSize="15" FontWeight="Bold" Foreground="#949BA4"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0"
                                                            Visibility="{x:Bind IsVoiceChannel, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibilityConverter}}" />

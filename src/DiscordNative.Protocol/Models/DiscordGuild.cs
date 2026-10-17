@@ -216,4 +216,10 @@ public sealed class DiscordRole
 
     [JsonPropertyName("position")]
     public int Position { get; set; }
+
+    [JsonPropertyName("permissions")]
+    public string? Permissions { get; set; }
+
+    [JsonIgnore]
+    public ulong PermissionBits => ulong.TryParse(Permissions, out var p) ? p : 0UL;
 }

@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$version = "0.4.8"
+$version = "0.4.9"
 $appReleaseDir = "src\DiscordNative.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64"
 $installerReleaseDir = "src\DiscordNative.Installer\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64"
 

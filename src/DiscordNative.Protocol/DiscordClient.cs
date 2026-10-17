@@ -391,6 +391,17 @@ public sealed class DiscordClient : IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    public List<string> GetCurrentUserGuildRoles(string guildId)
+    {
+        if (CurrentUser != null && !string.IsNullOrEmpty(guildId) &&
+            _guildMembers.TryGetValue(guildId, out var gDict) &&
+            gDict.TryGetValue(CurrentUser.Id, out var member))
+        {
+            return member.Roles ?? new List<string>();
+        }
+        return new List<string>();
+    }
+
     private void HandleReadySupplemental(JsonElement data)
     {
         try

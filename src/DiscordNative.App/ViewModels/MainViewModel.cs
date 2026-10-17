@@ -3,6 +3,7 @@ using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using DiscordNative.Protocol;
 using DiscordNative.Protocol.Models;
+using DiscordNative.Protocol.Utils;
 using DiscordNative.App.Services;
 
 namespace DiscordNative.App.ViewModels;
@@ -528,6 +529,25 @@ public sealed partial class MainViewModel : ObservableObject
         }
         _client.UpdateGuildVoiceAndStreamStatus(guild.Id);
 
+        // Calculer les permissions de chaque salon (visibilité et connexion)
+        var userRoles = _client.GetCurrentUserGuildRoles(guild.Id);
+        var channelDict = rawChannels.ToDictionary(c => c.Id);
+
+        foreach (var ch in rawChannels)
+        {
+            var (canView, canConnect) = DiscordPermissionEvaluator.EvaluateChannelPermissions(
+                ch,
+                guild,
+                _client.CurrentUser?.Id,
+                userRoles,
+                channelDict);
+
+            ch.CanView = canView;
+            ch.CanConnect = canConnect;
+        }
+
+        bool showHidden = App.Settings.Current.ShowHiddenChannels;
+
         // Trier logiquement : salons texte d'abord, puis salons vocaux (groupés par catégorie si applicable)
         var categories = rawChannels.Where(c => c.Type == DiscordChannelType.GuildCategory).ToDictionary(c => c.Id, c => c.Position);
 
@@ -541,7 +561,7 @@ public sealed partial class MainViewModel : ObservableObject
         int GetTypeOrder(DiscordChannel ch) => ch.IsVoiceChannel ? 1 : 0;
 
         var sortedChannels = rawChannels
-            .Where(c => c.IsTextLike || c.IsVoiceChannel)
+            .Where(c => (c.IsTextLike || c.IsVoiceChannel) && (c.CanView || showHidden))
             .OrderBy(c => GetCategoryPos(c))
             .ThenBy(c => GetTypeOrder(c))
             .ThenBy(c => c.Position);
@@ -572,6 +592,11 @@ public sealed partial class MainViewModel : ObservableObject
 
     public async Task SelectChannelAsync(DiscordChannel channel)
     {
+        if (channel.IsVoiceChannel && channel.IsLocked)
+        {
+            return;
+        }
+
         _selectedChannel = channel;
         _client.ActiveChannelId = channel.Id;
         channel.MentionCount = 0;

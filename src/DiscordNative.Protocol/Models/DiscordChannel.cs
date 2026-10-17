@@ -54,6 +54,52 @@ public sealed class DiscordChannel : INotifyPropertyChanged
     [JsonPropertyName("user_limit")]
     public int? UserLimit { get; set; }
 
+    [JsonPropertyName("permissions")]
+    public string? Permissions { get; set; }
+
+    [JsonPropertyName("permission_overwrites")]
+    public List<DiscordPermissionOverwrite>? PermissionOverwrites { get; set; }
+
+    private bool _canView = true;
+    [JsonIgnore]
+    public bool CanView
+    {
+        get => _canView;
+        set
+        {
+            if (_canView != value)
+            {
+                _canView = value;
+                OnPropertyChanged(nameof(CanView));
+                OnPropertyChanged(nameof(IsLocked));
+                OnPropertyChanged(nameof(ShowVoiceSpeakerIcon));
+            }
+        }
+    }
+
+    private bool _canConnect = true;
+    [JsonIgnore]
+    public bool CanConnect
+    {
+        get => _canConnect;
+        set
+        {
+            if (_canConnect != value)
+            {
+                _canConnect = value;
+                OnPropertyChanged(nameof(CanConnect));
+                OnPropertyChanged(nameof(IsLocked));
+                OnPropertyChanged(nameof(ShowVoiceSpeakerIcon));
+            }
+        }
+    }
+
+    [JsonIgnore]
+    public bool IsLocked => IsVoiceChannel && (!CanConnect || !CanView);
+
+    [JsonIgnore]
+    public bool ShowVoiceSpeakerIcon => IsVoiceChannel && !IsLocked;
+
     public bool IsTextLike => Type is DiscordChannelType.GuildText
         or DiscordChannelType.Dm
         or DiscordChannelType.GroupDm
@@ -139,4 +185,25 @@ public sealed class DiscordChannel : INotifyPropertyChanged
         DiscordChannelType.GroupDm => null, // Discord handles group DM icons separately
         _ => null
     };
+}
+
+public sealed class DiscordPermissionOverwrite
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("type")]
+    public int Type { get; set; } // 0 = role, 1 = member
+
+    [JsonPropertyName("allow")]
+    public string? Allow { get; set; }
+
+    [JsonPropertyName("deny")]
+    public string? Deny { get; set; }
+
+    [JsonIgnore]
+    public ulong AllowBits => ulong.TryParse(Allow, out var b) ? b : 0UL;
+
+    [JsonIgnore]
+    public ulong DenyBits => ulong.TryParse(Deny, out var b) ? b : 0UL;
 }
