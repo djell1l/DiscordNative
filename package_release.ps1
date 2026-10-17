@@ -3,9 +3,18 @@ $version = "0.4.1"
 $appReleaseDir = "src\DiscordNative.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64"
 $installerReleaseDir = "src\DiscordNative.Installer\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64"
 
-# Dynamically locate Appx tools and MSBuild (works on GitHub Actions Enterprise runner & local machines)
-$appxTools = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio" -Recurse -Filter Microsoft.Build.Packaging.Pri.Tasks.dll -ErrorAction SilentlyContinue |
+# Restore NuGet packages
+Write-Host "0. Restoring NuGet packages..." -ForegroundColor Cyan
+dotnet restore .\DiscordNative.sln
+
+# Dynamically locate Appx tools and MSBuild (prioritizing VS 2022 on GitHub Actions & local machines)
+$appxTools = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio\2022" -Recurse -Filter Microsoft.Build.Packaging.Pri.Tasks.dll -ErrorAction SilentlyContinue |
     Select-Object -First 1 | ForEach-Object { $_.DirectoryName + "\" }
+
+if (-not $appxTools) {
+    $appxTools = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio" -Recurse -Filter Microsoft.Build.Packaging.Pri.Tasks.dll -ErrorAction SilentlyContinue |
+        Select-Object -First 1 | ForEach-Object { $_.DirectoryName + "\" }
+}
 
 $msbuild = $null
 if ($appxTools) {
