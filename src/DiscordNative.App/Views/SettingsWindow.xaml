@@ -166,7 +166,7 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="Diswin v0.4.1 [Bleeding Edge] — Client WinUI 3 natif 100% C# non officiel, non affilié à Discord Inc." Opacity="0.5" FontSize="11" />
+                <TextBlock Text="Diswin v0.4.2 [Bleeding Edge] — Client WinUI 3 natif 100% C# non officiel, non affilié à Discord Inc." Opacity="0.5" FontSize="11" />
 
             </StackPanel>
         </ScrollViewer>

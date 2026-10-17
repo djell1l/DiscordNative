@@ -39,10 +39,10 @@ DiscordNative.sln
 
 ## Installation & Distribution
 
-### 1. Single-File WinUI 3 Setup (`Diswin-Setup-v0.4.1-win-x64.exe`)
+### 1. Single-File WinUI 3 Setup (`Diswin-Setup-v0.4.2-win-x64.exe`)
 Download and run the single executable installer. It is a genuine Windows 11 setup wizard written in WinUI 3 that unpacks natively, creates a Desktop shortcut, registers in your Start Menu, and gets out of your way.
 
-### 2. Standalone Portable (`Diswin-v0.4.1-win-x64-portable.zip`)
+### 2. Standalone Portable (`Diswin-v0.4.2-win-x64-portable.zip`)
 For minimalists and portable USB drives. Unzip anywhere, run `DiscordNative.App.exe`, and you're good to go.
 
 ### 3. Automatic Updates
