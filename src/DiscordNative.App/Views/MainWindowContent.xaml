@@ -586,15 +586,20 @@
                                                     <TextBlock Text="{x:Bind ViewModel.CurrentUserPronouns, Mode=OneWay}" Opacity="0.7" FontSize="12" VerticalAlignment="Center" Visibility="{x:Bind ViewModel.CurrentUserPronounsVisibility, Mode=OneWay}" />
 
                                                     <!-- Tag de Clan / Serveur Principal (ex: 🌸 DSKY) -->
-                                                    <Border Visibility="{x:Bind ViewModel.CurrentUserClanVisibility, Mode=OneWay}"
-                                                            Background="{ThemeResource ControlFillColorSecondaryBrush}"
-                                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                                            BorderThickness="1" CornerRadius="6" Padding="6,2" VerticalAlignment="Center">
-                                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                                            <Image Width="14" Height="14" Source="{x:Bind ViewModel.CurrentUserClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
-                                                            <TextBlock Text="{x:Bind ViewModel.CurrentUserClanTag, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                                        </StackPanel>
-                                                    </Border>
+                                                    <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6"
+                                                            Visibility="{x:Bind ViewModel.CurrentUserClanVisibility, Mode=OneWay}"
+                                                            Tag="{x:Bind ViewModel.CurrentUser, Mode=OneWay}"
+                                                            Click="OnClanTagPillClicked"
+                                                            ToolTipService.ToolTip="Afficher le profil du clan">
+                                                        <Border Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                                BorderThickness="1" CornerRadius="6" Padding="6,2" VerticalAlignment="Center">
+                                                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                                <Image Width="14" Height="14" Source="{x:Bind ViewModel.CurrentUserClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
+                                                                <TextBlock Text="{x:Bind ViewModel.CurrentUserClanTag, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </Button>
                                                 </StackPanel>
 
                                                 <!-- Badges officiels du profil Discord -->
@@ -1683,17 +1688,21 @@
                                                                                Visibility="{x:Bind Author.HasPronouns, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                                                     <!-- Tag de Clan / Serveur avec son icône (ex: 🐱 illit) -->
-                                                                    <Border Visibility="{x:Bind Author.HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                                            Background="{x:Bind Author.ProfilePillBackgroundColorHex, Mode=OneWay}"
-                                                                            BorderBrush="#33FFFFFF"
-                                                                            BorderThickness="1" CornerRadius="6" Padding="7,2" VerticalAlignment="Center">
-                                                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                                                            <Image Width="14" Height="14" Source="{x:Bind Author.ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
-                                                                            <TextBlock Text="{x:Bind Author.ClanTag, Mode=OneWay}"
-                                                                                       Foreground="{x:Bind Author.ProfileTextForegroundColorHex, Mode=OneWay}"
-                                                                                       FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                                                        </StackPanel>
-                                                                    </Border>
+                                                                    <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6"
+                                                                            Visibility="{x:Bind Author.HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                            Tag="{x:Bind Author}" Click="OnClanTagPillClicked"
+                                                                            ToolTipService.ToolTip="Afficher le profil du clan">
+                                                                        <Border Background="{x:Bind Author.ProfilePillBackgroundColorHex, Mode=OneWay}"
+                                                                                BorderBrush="#33FFFFFF"
+                                                                                BorderThickness="1" CornerRadius="6" Padding="7,2" VerticalAlignment="Center">
+                                                                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                                                <Image Width="14" Height="14" Source="{x:Bind Author.ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
+                                                                                <TextBlock Text="{x:Bind Author.ClanTag, Mode=OneWay}"
+                                                                                           Foreground="{x:Bind Author.ProfileTextForegroundColorHex, Mode=OneWay}"
+                                                                                           FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                                            </StackPanel>
+                                                                        </Border>
+                                                                    </Button>
 
                                                                     <!-- Badges officiels de l'utilisateur alignés sur la même ligne -->
                                                                     <ItemsControl ItemsSource="{x:Bind Author.Badges, Mode=OneWay}"
@@ -1913,15 +1922,19 @@
                                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                                 <TextBlock Text="{x:Bind Author.DisplayName}" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
                                                 <!-- Pill Tag de Clan à côté du pseudo dans les messages (ex: 🐱 illit) -->
-                                                <Border Visibility="{x:Bind Author.HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                        Background="{ThemeResource ControlFillColorSecondaryBrush}"
-                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                                        BorderThickness="1" CornerRadius="5" Padding="5,1" VerticalAlignment="Center">
-                                                    <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                                                        <Image Width="12" Height="12" Source="{x:Bind Author.ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
-                                                        <TextBlock Text="{x:Bind Author.ClanTag, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                                    </StackPanel>
-                                                </Border>
+                                                <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="5"
+                                                        Visibility="{x:Bind Author.HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Tag="{x:Bind Author}" Click="OnClanTagPillClicked"
+                                                        ToolTipService.ToolTip="Afficher le profil du clan">
+                                                    <Border Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                            BorderThickness="1" CornerRadius="5" Padding="5,1" VerticalAlignment="Center">
+                                                        <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                                            <Image Width="12" Height="12" Source="{x:Bind Author.ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
+                                                            <TextBlock Text="{x:Bind Author.ClanTag, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Button>
                                                 <TextBlock Text="{x:Bind ShortTime}" Opacity="0.5" FontSize="12" VerticalAlignment="Center" />
                                                 <TextBlock Text="{x:Bind EditedText}" Opacity="0.45" FontSize="11" VerticalAlignment="Center"
                                                            Visibility="{x:Bind IsEdited, Converter={StaticResource BoolToVisibilityConverter}}" />
@@ -2495,6 +2508,20 @@
 
                                                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                                                             <TextBlock Text="{x:Bind UserTag}" FontSize="12" Foreground="#B5BAC1" FontWeight="Normal" />
+
+                                                                            <!-- Tag de Clan / Serveur (ex: ⚡ SO) -->
+                                                                            <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="5"
+                                                                                    Visibility="{x:Bind HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                                    Tag="{x:Bind}" Click="OnClanTagPillClicked"
+                                                                                    ToolTipService.ToolTip="Afficher le profil du clan">
+                                                                                <Border Background="#2b2d31" BorderBrush="#35373C" BorderThickness="1" CornerRadius="5" Padding="5,1">
+                                                                                    <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                                                                        <Image Width="12" Height="12" Source="{x:Bind ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
+                                                                                        <TextBlock Text="{x:Bind ClanTag, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="#DBDEE1" VerticalAlignment="Center" />
+                                                                                    </StackPanel>
+                                                                                </Border>
+                                                                            </Button>
+
                                                                             <ItemsControl ItemsSource="{x:Bind Badges, Mode=OneWay}" VerticalAlignment="Center"
                                                                                           Visibility="{x:Bind HasBadges, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                                                                                 <ItemsControl.ItemsPanel>
@@ -2606,13 +2633,17 @@
                                                             <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                                                                 <TextBlock Text="{x:Bind DisplayName}" FontSize="13" FontWeight="Medium" Foreground="#F2F3F5" TextTrimming="CharacterEllipsis" MaxWidth="110" />
                                                                 <!-- Tag de Clan (ex: 🐱 illit) -->
-                                                                <Border Visibility="{x:Bind HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                                        Background="#2b2d31" CornerRadius="4" Padding="4,1" VerticalAlignment="Center">
-                                                                    <StackPanel Orientation="Horizontal" Spacing="2">
-                                                                        <Image Width="10" Height="10" Source="{x:Bind ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
-                                                                        <TextBlock Text="{x:Bind ClanTag, Mode=OneWay}" FontSize="9" FontWeight="Bold" Foreground="#DBDEE1" />
-                                                                    </StackPanel>
-                                                                </Border>
+                                                                <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4"
+                                                                        Visibility="{x:Bind HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                        Tag="{x:Bind}" Click="OnClanTagPillClicked"
+                                                                        ToolTipService.ToolTip="Afficher le profil du clan">
+                                                                    <Border Background="#2b2d31" CornerRadius="4" Padding="4,1" VerticalAlignment="Center">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="2">
+                                                                            <Image Width="10" Height="10" Source="{x:Bind ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
+                                                                            <TextBlock Text="{x:Bind ClanTag, Mode=OneWay}" FontSize="9" FontWeight="Bold" Foreground="#DBDEE1" />
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </Button>
                                                                 <!-- Badge Bot -->
                                                                 <Border Visibility="{x:Bind Bot, Converter={StaticResource BoolToVisibilityConverter}}"
                                                                         Background="#5865F2" CornerRadius="3" Padding="4,1" VerticalAlignment="Center">
@@ -2778,6 +2809,20 @@
 
                                                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                                                             <TextBlock Text="{x:Bind UserTag}" FontSize="12" Foreground="#B5BAC1" FontWeight="Normal" />
+
+                                                                            <!-- Tag de Clan / Serveur (ex: ⚡ SO) -->
+                                                                            <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="5"
+                                                                                    Visibility="{x:Bind HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                                    Tag="{x:Bind}" Click="OnClanTagPillClicked"
+                                                                                    ToolTipService.ToolTip="Afficher le profil du clan">
+                                                                                <Border Background="#2b2d31" BorderBrush="#35373C" BorderThickness="1" CornerRadius="5" Padding="5,1">
+                                                                                    <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                                                                        <Image Width="12" Height="12" Source="{x:Bind ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
+                                                                                        <TextBlock Text="{x:Bind ClanTag, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="#DBDEE1" VerticalAlignment="Center" />
+                                                                                    </StackPanel>
+                                                                                </Border>
+                                                                            </Button>
+
                                                                             <ItemsControl ItemsSource="{x:Bind Badges, Mode=OneWay}" VerticalAlignment="Center"
                                                                                           Visibility="{x:Bind HasBadges, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                                                                                 <ItemsControl.ItemsPanel>
@@ -2860,7 +2905,21 @@
                                                                      HorizontalAlignment="Right" VerticalAlignment="Bottom" />
                                                         </Grid>
                                                         <StackPanel VerticalAlignment="Center" MaxWidth="150">
-                                                            <TextBlock Text="{x:Bind DisplayName}" FontSize="13" FontWeight="Medium" Foreground="#949BA4" TextTrimming="CharacterEllipsis" />
+                                                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                                <TextBlock Text="{x:Bind DisplayName}" FontSize="13" FontWeight="Medium" Foreground="#949BA4" TextTrimming="CharacterEllipsis" MaxWidth="110" />
+                                                                <!-- Tag de Clan (ex: 🐱 illit) -->
+                                                                <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4"
+                                                                        Visibility="{x:Bind HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                        Tag="{x:Bind}" Click="OnClanTagPillClicked"
+                                                                        ToolTipService.ToolTip="Afficher le profil du clan">
+                                                                    <Border Background="#2b2d31" CornerRadius="4" Padding="4,1" VerticalAlignment="Center">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="2">
+                                                                            <Image Width="10" Height="10" Source="{x:Bind ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
+                                                                            <TextBlock Text="{x:Bind ClanTag, Mode=OneWay}" FontSize="9" FontWeight="Bold" Foreground="#DBDEE1" />
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </Button>
+                                                            </StackPanel>
                                                         </StackPanel>
                                                     </StackPanel>
                                                 </Button>
@@ -3064,13 +3123,17 @@
                                                        Opacity="0.75" FontSize="13" VerticalAlignment="Center" />
 
                                             <!-- Tag Clan (ex: [✨ yuki]) -->
-                                            <Border Background="#33FFFFFF" CornerRadius="8" Padding="6,2" VerticalAlignment="Center"
-                                                    Visibility="{x:Bind FullProfileUser.HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                                    <Image Width="12" Height="12" Source="{x:Bind FullProfileUser.ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
-                                                    <TextBlock Text="{x:Bind FullProfileUser.ClanTag, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
-                                                </StackPanel>
-                                            </Border>
+                                            <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="8"
+                                                    Visibility="{x:Bind FullProfileUser.HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                    Tag="{x:Bind FullProfileUser}" Click="OnClanTagPillClicked"
+                                                    ToolTipService.ToolTip="Afficher le profil du clan">
+                                                <Border Background="#33FFFFFF" CornerRadius="8" Padding="6,2" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                                        <Image Width="12" Height="12" Source="{x:Bind FullProfileUser.ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
+                                                        <TextBlock Text="{x:Bind FullProfileUser.ClanTag, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </Button>
 
                                             <!-- Badges -->
                                             <ItemsControl ItemsSource="{x:Bind FullProfileUser.Badges, Mode=OneWay}">
@@ -3300,8 +3363,142 @@
             </Border>
         </Grid>
 
+        <!-- Popout Carte de Clan / Tag de Serveur 100% fidèle à media_1792269408281_3c34b0fe.png -->
+        <Grid x:Name="ClanTagPopoutOverlay" Visibility="Collapsed" Background="#33000000" Canvas.ZIndex="920"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+              PointerPressed="OnClanTagOverlayBackdropPointerPressed">
+            <Canvas HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Border x:Name="ClanTagPopoutCard" Width="344" CornerRadius="18"
+                        Background="#232428" BorderBrush="#383A40" BorderThickness="1"
+                        PointerPressed="OnClanTagCardPointerPressed">
+                    <Grid>
+                        <!-- 1. Bannière du serveur (124px de haut, coins arrondis en haut) -->
+                        <Border Height="124" VerticalAlignment="Top" CornerRadius="17,17,0,0" Background="#111214">
+                            <Grid>
+                                <!-- Bannière image si disponible -->
+                                <Border CornerRadius="17,17,0,0"
+                                        Visibility="{x:Bind ViewModel.ActiveClanCard.HasBanner, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{x:Bind ViewModel.ActiveClanCard.BannerUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}"
+                                                    Stretch="UniformToFill" AlignmentY="Center" AlignmentX="Center" />
+                                    </Border.Background>
+                                </Border>
+                                <!-- Dégradé d'ambiance si pas de bannière -->
+                                <Border CornerRadius="17,17,0,0"
+                                        Visibility="{x:Bind ViewModel.ActiveClanCard.HasBanner, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#1E3A5F" Offset="0.0" />
+                                            <GradientStop Color="#0F172A" Offset="1.0" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <!-- 2. Icône du serveur (Squircle 76x76 qui chevauche la bannière avec bordure épaisse de découpe) -->
+                        <Grid Width="76" Height="76" Margin="16,74,0,0" HorizontalAlignment="Left" VerticalAlignment="Top">
+                            <Border Width="76" Height="76" CornerRadius="20" Background="#232428" />
+                            <Border Width="70" Height="70" CornerRadius="18" Background="#111214"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid>
+                                    <!-- Image de l'icône du serveur / badge de clan -->
+                                    <Border CornerRadius="18"
+                                            Visibility="{x:Bind ViewModel.ActiveClanCard.HasIcon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <Border.Background>
+                                            <ImageBrush ImageSource="{x:Bind ViewModel.ActiveClanCard.IconUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
+                                        </Border.Background>
+                                    </Border>
+                                    <!-- Initiales si pas d'icône -->
+                                    <TextBlock Text="{x:Bind ViewModel.ActiveClanCard.Tag, Mode=OneWay}"
+                                               FontSize="20" FontWeight="Bold" Foreground="White"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Visibility="{x:Bind ViewModel.ActiveClanCard.HasIcon, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <!-- 3. Contenu du profil du clan/serveur sous la bannière -->
+                        <StackPanel Margin="16,156,16,16" Spacing="10">
+                            <!-- Nom du serveur + Badge Partenaire/Vérifié (fleur rose) + Tag de Clan -->
+                            <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind ViewModel.ActiveClanCard.GuildName, Mode=OneWay}"
+                                               FontSize="18" FontWeight="Bold" Foreground="#F2F3F5"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="210" />
+
+                                    <!-- Badge Fleur Rose Vérifié / Partenaire / Communauté (comme sur la capture) -->
+                                    <Border Width="18" Height="18" CornerRadius="9" Background="#F47B67"
+                                            VerticalAlignment="Center" ToolTipService.ToolTip="Communauté / Serveur vérifié"
+                                            Visibility="{x:Bind ViewModel.ActiveClanCard.IsVerifiedOrPartner, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <FontIcon Glyph="&#xE73E;" FontSize="11" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+
+                                    <!-- Pill Badge du Clan (ex: ⚡ SO) -->
+                                    <Border Background="#111214" BorderBrush="#35373C" BorderThickness="1" CornerRadius="6" Padding="6,2" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                            <Image Width="12" Height="12"
+                                                   Source="{x:Bind ViewModel.ActiveClanCard.BadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}"
+                                                   Stretch="Uniform" />
+                                            <TextBlock Text="{x:Bind ViewModel.ActiveClanCard.Tag, Mode=OneWay}"
+                                                       FontSize="11" FontWeight="Bold" Foreground="#F2F3F5" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Statistiques de membres (🟢 1,632 En ligne • ⚪ 23,307 Membres) -->
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                                            Visibility="{x:Bind ViewModel.ActiveClanCard.HasMemberCount, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                                                Visibility="{x:Bind ViewModel.ActiveClanCard.HasOnlineCount, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <Ellipse Width="8" Height="8" Fill="#23A55A" VerticalAlignment="Center" />
+                                        <TextBlock Text="{x:Bind ViewModel.ActiveClanCard.OnlineCountText, Mode=OneWay}"
+                                                   FontSize="12" FontWeight="Medium" Foreground="#B5BAC1" VerticalAlignment="Center" />
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                        <Ellipse Width="8" Height="8" Fill="#80848E" VerticalAlignment="Center" />
+                                        <TextBlock Text="{x:Bind ViewModel.ActiveClanCard.MemberCountText, Mode=OneWay}"
+                                                   FontSize="12" FontWeight="Medium" Foreground="#B5BAC1" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Date de création (Est. Jan 2019) -->
+                                <TextBlock Text="{x:Bind ViewModel.ActiveClanCard.EstablishedText, Mode=OneWay}"
+                                           FontSize="12" FontWeight="Normal" Foreground="#949BA4"
+                                           Visibility="{x:Bind ViewModel.ActiveClanCard.HasEstablished, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            </StackPanel>
+
+                            <!-- Description du serveur -->
+                            <TextBlock Text="{x:Bind ViewModel.ActiveClanCard.Description, Mode=OneWay}"
+                                       FontSize="12" Foreground="#DBDEE1" TextWrapping="Wrap" MaxLines="4"
+                                       Visibility="{x:Bind ViewModel.ActiveClanCard.HasDescription, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <!-- Jeu ou activité associée (ex: Grand Theft Auto V Legacy) -->
+                            <Border Visibility="{x:Bind ViewModel.ActiveClanCard.HasAssociatedGame, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    Background="#111214" BorderBrush="#35373C" BorderThickness="1" CornerRadius="8" Padding="8,6">
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <Image Width="22" Height="22"
+                                           Source="{x:Bind ViewModel.ActiveClanCard.AssociatedGameIconUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}"
+                                           Stretch="Uniform" />
+                                    <TextBlock Text="{x:Bind ViewModel.ActiveClanCard.AssociatedGameName, Mode=OneWay}"
+                                               FontSize="12" FontWeight="SemiBold" Foreground="#F2F3F5" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Bouton Rejoindre (vert Discord #23A55A) -->
+                            <Button HorizontalAlignment="Stretch" Height="40" CornerRadius="8"
+                                    Background="#23A55A" Foreground="White" FontWeight="Bold" FontSize="13"
+                                    Content="{x:Bind ViewModel.ActiveClanCard.ActionButtonText, Mode=OneWay}"
+                                    Click="OnClanCardJoinClicked" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Canvas>
+        </Grid>
+
         <!-- Modal Éditeur de Profil (Fenêtre modale centrée non plein écran 100% fidèle à Discord) -->
-        <Grid x:Name="ProfileEditorOverlay" Visibility="Collapsed" Background="#CC000000" Canvas.ZIndex="900"
+        <Grid x:Name="ProfileEditorOverlay" Visibility="Collapsed" Background="#CC000000" Canvas.ZIndex="930"
               HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
               PointerPressed="OnProfileEditorBackdropPointerPressed" />
 

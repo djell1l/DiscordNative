@@ -26,6 +26,40 @@ public sealed class DiscordGuild : INotifyPropertyChanged
     [JsonPropertyName("roles")]
     public List<DiscordRole> Roles { get; set; } = new();
 
+    [JsonPropertyName("banner")]
+    public string? Banner { get; set; }
+
+    [JsonPropertyName("splash")]
+    public string? Splash { get; set; }
+
+    [JsonPropertyName("discovery_splash")]
+    public string? DiscoverySplash { get; set; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    [JsonPropertyName("vanity_url_code")]
+    public string? VanityUrlCode { get; set; }
+
+    [JsonPropertyName("approximate_member_count")]
+    public int? ApproximateMemberCount { get; set; }
+
+    [JsonPropertyName("approximate_presence_count")]
+    public int? ApproximatePresenceCount { get; set; }
+
+    [JsonPropertyName("features")]
+    public List<string> Features { get; set; } = new();
+
+    public string? BannerUrl => !string.IsNullOrEmpty(Banner)
+        ? $"https://cdn.discordapp.com/banners/{Id}/{Banner}.png?size=512"
+        : (!string.IsNullOrEmpty(DiscoverySplash)
+            ? $"https://cdn.discordapp.com/discovery-splashes/{Id}/{DiscoverySplash}.png?size=512"
+            : (!string.IsNullOrEmpty(Splash)
+                ? $"https://cdn.discordapp.com/splashes/{Id}/{Splash}.png?size=512"
+                : null));
+
+    public bool HasBanner => !string.IsNullOrEmpty(BannerUrl);
+
     public bool IsAnimated => Icon is not null && Icon.StartsWith("a_");
 
     public string? StaticIconUrl => Icon is null

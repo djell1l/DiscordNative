@@ -727,6 +727,61 @@ public sealed class DiscordRestClient : IDisposable
         return lastSlash >= 0 ? trimmed[(lastSlash + 1)..] : trimmed;
     }
 
+    public async Task<JsonElement?> GetGuildPreviewOrProfileRawAsync(string guildId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(guildId)) return null;
+
+        // 1. Tenter GET /guilds/{guildId}/preview
+        try
+        {
+            using var resp = await _http.GetAsync($"{ApiBase}/guilds/{guildId}/preview", ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                return doc.RootElement.Clone();
+            }
+        }
+        catch { }
+
+        // 2. Tenter GET /guilds/{guildId}?with_counts=true
+        try
+        {
+            using var resp = await _http.GetAsync($"{ApiBase}/guilds/{guildId}?with_counts=true", ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                return doc.RootElement.Clone();
+            }
+        }
+        catch { }
+
+        // 3. Tenter GET /guilds/{guildId}/basic
+        try
+        {
+            using var resp = await _http.GetAsync($"{ApiBase}/guilds/{guildId}/basic", ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                return doc.RootElement.Clone();
+            }
+        }
+        catch { }
+
+        // 4. Tenter GET /guilds/{guildId}/profile
+        try
+        {
+            using var resp = await _http.GetAsync($"{ApiBase}/guilds/{guildId}/profile", ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                return doc.RootElement.Clone();
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
     private sealed class SendMessageRequest
     {
         [JsonPropertyName("content")] public string Content { get; set; } = string.Empty;

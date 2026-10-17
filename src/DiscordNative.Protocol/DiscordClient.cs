@@ -423,6 +423,11 @@ public sealed class DiscordClient : IAsyncDisposable
         return (null, null);
     }
 
+    public Task<JsonElement?> GetGuildPreviewOrProfileAsync(string guildId, CancellationToken ct = default)
+    {
+        return Rest.GetGuildPreviewOrProfileRawAsync(guildId, ct);
+    }
+
     private void HandleGuildMemberListUpdate(JsonElement data)
     {
         try

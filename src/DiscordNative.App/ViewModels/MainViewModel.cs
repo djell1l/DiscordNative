@@ -1420,4 +1420,80 @@ public sealed partial class MainViewModel : ObservableObject
             FilteredChannels.Add(ch);
         }
     }
+
+    private DiscordClanCardViewModel? _activeClanCard;
+    public DiscordClanCardViewModel? ActiveClanCard
+    {
+        get => _activeClanCard;
+        set
+        {
+            if (_activeClanCard != value)
+            {
+                _activeClanCard = value;
+                OnPropertyChanged(nameof(ActiveClanCard));
+                OnPropertyChanged(nameof(HasActiveClanCard));
+            }
+        }
+    }
+    public bool HasActiveClanCard => ActiveClanCard != null;
+
+    public async Task<DiscordClanCardViewModel> LoadClanCardAsync(DiscordClan clan)
+    {
+        var card = new DiscordClanCardViewModel
+        {
+            GuildId = clan.IdentityGuildId ?? string.Empty,
+            Tag = clan.Tag ?? string.Empty,
+            BadgeUrl = clan.BadgeUrl,
+            IconUrl = clan.BadgeUrl,
+            IsLoading = true
+        };
+        card.EstablishedText = DiscordClanCardViewModel.ComputeEstablishedText(card.GuildId);
+        ActiveClanCard = card;
+
+        // 1. Vérifier si la guilde est déjà dans les guildes locales
+        var localGuild = Guilds.FirstOrDefault(g => g.Id == card.GuildId);
+        if (localGuild != null)
+        {
+            card.UpdateFromGuild(localGuild, clan.Tag, clan.BadgeUrl);
+            card.IsLoading = false;
+        }
+
+        // 2. Tenter de charger les données complètes (preview / profil / stats / jeux) depuis l'API
+        if (!string.IsNullOrWhiteSpace(card.GuildId))
+        {
+            try
+            {
+                var rawJson = await _client.GetGuildPreviewOrProfileAsync(card.GuildId);
+                if (rawJson.HasValue)
+                {
+                    card.UpdateFromPreview(rawJson.Value, clan.Tag, clan.BadgeUrl);
+                    if (localGuild != null) card.IsAlreadyJoined = true;
+                }
+            }
+            catch { }
+        }
+
+        card.IsLoading = false;
+        return card;
+    }
+
+    public async Task JoinOrAccessClanGuildAsync(DiscordClanCardViewModel card)
+    {
+        if (card.IsAlreadyJoined)
+        {
+            var guild = Guilds.FirstOrDefault(g => g.Id == card.GuildId);
+            if (guild != null)
+            {
+                await SelectGuildAsync(guild);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(card.VanityUrlCode))
+        {
+            try
+            {
+                await JoinServerByInviteAsync(card.VanityUrlCode);
+            }
+            catch { }
+        }
+    }
 }

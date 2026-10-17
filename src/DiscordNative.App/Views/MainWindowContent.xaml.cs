@@ -3394,4 +3394,83 @@ public sealed partial class MainWindowContent : UserControl
         }
         return null;
     }
+
+    // --- Popout Carte de Clan / Tag de Serveur (100% fidèle à media_1792269408281_3c34b0fe.png) ---
+    private void OnClanTagPillClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe)
+        {
+            DiscordClan? clan = fe.Tag as DiscordClan
+                ?? (fe.Tag as DiscordUser)?.ActiveClan
+                ?? (fe.DataContext as DiscordUser)?.ActiveClan
+                ?? (fe.DataContext as DiscordMessage)?.Author.ActiveClan;
+
+            if (clan == null && fe.Tag is null)
+            {
+                clan = ViewModel.CurrentUser?.ActiveClan;
+            }
+
+            if (clan != null && !string.IsNullOrWhiteSpace(clan.IdentityGuildId))
+            {
+                var pos = new Windows.Foundation.Point(100, 100);
+                try
+                {
+                    var transform = fe.TransformToVisual(this);
+                    pos = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+                }
+                catch { }
+
+                ShowClanTagPopout(clan, pos, fe.ActualWidth, fe.ActualHeight);
+            }
+        }
+    }
+
+    private void ShowClanTagPopout(DiscordClan clan, Windows.Foundation.Point pos, double width, double height)
+    {
+        _ = ViewModel.LoadClanCardAsync(clan);
+
+        // Positionner la carte de clan à côté du tag / popout (façon Discord desktop)
+        double cardWidth = 344;
+        double cardHeight = 440;
+
+        double left;
+        if (pos.X + width + cardWidth + 12 < this.ActualWidth)
+        {
+            left = pos.X + width + 10;
+        }
+        else if (pos.X - cardWidth - 12 > 0)
+        {
+            left = pos.X - cardWidth - 10;
+        }
+        else
+        {
+            left = Math.Max(20, (this.ActualWidth - cardWidth) / 2);
+        }
+
+        double top = Math.Max(20, Math.Min(pos.Y - 20, Math.Max(20, this.ActualHeight - cardHeight - 20)));
+
+        Canvas.SetLeft(ClanTagPopoutCard, left);
+        Canvas.SetTop(ClanTagPopoutCard, top);
+
+        ClanTagPopoutOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void OnClanTagOverlayBackdropPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        ClanTagPopoutOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnClanTagCardPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    private async void OnClanCardJoinClicked(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.ActiveClanCard != null)
+        {
+            await ViewModel.JoinOrAccessClanGuildAsync(ViewModel.ActiveClanCard);
+            ClanTagPopoutOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
 }
