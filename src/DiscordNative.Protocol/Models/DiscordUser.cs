@@ -18,6 +18,8 @@ public sealed class DiscordUser : INotifyPropertyChanged
         OnPropertyChanged(nameof(Activities));
         OnPropertyChanged(nameof(PrimaryActivity));
         OnPropertyChanged(nameof(CustomStatusActivity));
+        OnPropertyChanged(nameof(HasCustomStatus));
+        OnPropertyChanged(nameof(CustomStatusText));
         OnPropertyChanged(nameof(HasRichPresence));
         OnPropertyChanged(nameof(HasActivityOrCustomStatus));
         OnPropertyChanged(nameof(ActivitySummaryText));
@@ -33,6 +35,17 @@ public sealed class DiscordUser : INotifyPropertyChanged
         OnPropertyChanged(nameof(BannerUrl));
         OnPropertyChanged(nameof(HasBanner));
         OnPropertyChanged(nameof(AccentColor));
+        OnPropertyChanged(nameof(ThemeColors));
+        OnPropertyChanged(nameof(HasCustomThemeColors));
+        OnPropertyChanged(nameof(ProfilePrimaryColorHex));
+        OnPropertyChanged(nameof(ProfileSecondaryColorHex));
+        OnPropertyChanged(nameof(ProfileBorderColorHex));
+        OnPropertyChanged(nameof(ProfilePillBackgroundColorHex));
+        OnPropertyChanged(nameof(ProfileTextForegroundColorHex));
+        OnPropertyChanged(nameof(MutualFriendsCount));
+        OnPropertyChanged(nameof(MutualGuildsCount));
+        OnPropertyChanged(nameof(HasMutualInfo));
+        OnPropertyChanged(nameof(MutualSummaryText));
         OnPropertyChanged(nameof(Clan));
         OnPropertyChanged(nameof(PrimaryGuild));
         OnPropertyChanged(nameof(ActiveClan));
@@ -72,6 +85,59 @@ public sealed class DiscordUser : INotifyPropertyChanged
 
     [JsonPropertyName("accent_color")]
     public int? AccentColor { get; set; }
+
+    public List<int> ThemeColors { get; set; } = new();
+    public bool HasCustomThemeColors => ThemeColors.Count >= 2;
+
+    public string ProfilePrimaryColorHex => HasCustomThemeColors
+        ? $"#{ThemeColors[0]:X6}"
+        : (AccentColor is int ac ? $"#{ac:X6}" : "#232428");
+
+    public string ProfileSecondaryColorHex => HasCustomThemeColors
+        ? $"#{ThemeColors[1]:X6}"
+        : (AccentColor is int ac ? $"#{ac:X6}" : "#111214");
+
+    public string ProfileBorderColorHex => HasCustomThemeColors
+        ? $"#{ThemeColors[0]:X6}"
+        : (AccentColor is int ac ? $"#{ac:X6}" : "#383A40");
+
+    public string ProfilePillBackgroundColorHex
+    {
+        get
+        {
+            if (!HasCustomThemeColors) return "#33FFFFFF";
+            return IsThemeLight ? "#55FFFFFF" : "#44000000";
+        }
+    }
+
+    public string ProfileTextForegroundColorHex => (HasCustomThemeColors && IsThemeLight) ? "#1E1F22" : "#FFFFFF";
+
+    public bool IsThemeLight
+    {
+        get
+        {
+            if (!HasCustomThemeColors) return false;
+            int c0 = ThemeColors[0];
+            int c1 = ThemeColors[1];
+            double lum0 = (0.299 * ((c0 >> 16) & 0xFF)) + (0.587 * ((c0 >> 8) & 0xFF)) + (0.114 * (c0 & 0xFF));
+            double lum1 = (0.299 * ((c1 >> 16) & 0xFF)) + (0.587 * ((c1 >> 8) & 0xFF)) + (0.114 * (c1 & 0xFF));
+            return ((lum0 + lum1) / 2.0) > 145.0;
+        }
+    }
+
+    public int MutualFriendsCount { get; set; }
+    public int MutualGuildsCount { get; set; }
+    public bool HasMutualInfo => MutualFriendsCount > 0 || MutualGuildsCount > 0;
+    public string MutualSummaryText
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (MutualFriendsCount > 0) parts.Add($"{MutualFriendsCount} Mutual Friend{(MutualFriendsCount > 1 ? "s" : "")}");
+            if (MutualGuildsCount > 0) parts.Add($"{MutualGuildsCount} Mutual Server{(MutualGuildsCount > 1 ? "s" : "")}");
+            return string.Join(" • ", parts);
+        }
+    }
 
     [JsonPropertyName("bio")]
     public string? Bio { get; set; }
@@ -127,8 +193,15 @@ public sealed class DiscordUser : INotifyPropertyChanged
 
     public DiscordActivity? PrimaryActivity => Activities.FirstOrDefault(a => a.Type != 4 && a.Type != 6);
     public DiscordActivity? CustomStatusActivity => Activities.FirstOrDefault(a => a.Type == 4 && !string.IsNullOrWhiteSpace(a.State));
+    public bool HasCustomStatus => CustomStatusActivity is not null && !string.IsNullOrWhiteSpace(CustomStatusActivity.State);
+    public string CustomStatusText => CustomStatusActivity?.State ?? string.Empty;
     public bool HasRichPresence => PrimaryActivity is not null;
     public bool HasActivityOrCustomStatus => PrimaryActivity is not null || CustomStatusActivity is not null;
+    public void NotifyActivityTimesChanged()
+    {
+        PrimaryActivity?.NotifyTimeChanged();
+        OnPropertyChanged(nameof(PrimaryActivity));
+    }
 
     public string ActivitySummaryText
     {
@@ -277,8 +350,17 @@ public sealed class DiscordUser : INotifyPropertyChanged
     };
 }
 
-public sealed class DiscordActivity
+public sealed class DiscordActivity : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+    public void NotifyTimeChanged()
+    {
+        OnPropertyChanged(nameof(ElapsedText));
+        OnPropertyChanged(nameof(HasElapsed));
+    }
+
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
 
@@ -337,8 +419,19 @@ public sealed class DiscordActivity
         get
         {
             if (Timestamps?.Start is not long startMs || startMs <= 0) return string.Empty;
-            var elapsed = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(startMs);
+            var now = DateTimeOffset.UtcNow;
+            var start = DateTimeOffset.FromUnixTimeMilliseconds(startMs);
+            var elapsed = now - start;
             if (elapsed.TotalSeconds < 0) elapsed = TimeSpan.Zero;
+
+            // Pour Spotify ou musiques avec durée de fin (Timestamps.End)
+            if (Timestamps?.End is long endMs && endMs > startMs)
+            {
+                var total = DateTimeOffset.FromUnixTimeMilliseconds(endMs) - start;
+                if (elapsed > total) elapsed = total;
+                return $"{(int)elapsed.TotalMinutes:00}:{elapsed.Seconds:00} / {(int)total.TotalMinutes:00}:{total.Seconds:00}";
+            }
+
             return elapsed.TotalHours >= 1
                 ? $"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00} écoulées"
                 : $"{elapsed.Minutes:00}:{elapsed.Seconds:00} écoulées";

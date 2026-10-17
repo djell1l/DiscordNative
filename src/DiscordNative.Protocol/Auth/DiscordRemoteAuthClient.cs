@@ -52,18 +52,25 @@ public sealed class DiscordRemoteAuthClient : IDisposable
 
     public DiscordRemoteAuthClient(HttpClient? httpClient = null)
     {
-        _http = httpClient ?? new HttpClient();
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36");
-        _http.DefaultRequestHeaders.Accept.Clear();
-        _http.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("Origin", "https://discord.com");
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://discord.com/login");
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Discord-Locale", "fr");
+        if (httpClient is not null)
+        {
+            _http = httpClient;
+        }
+        else
+        {
+            _http = new HttpClient();
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36");
+            _http.DefaultRequestHeaders.Accept.Clear();
+            _http.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("Origin", "https://discord.com");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://discord.com/login");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Discord-Locale", "fr");
 
-        var superProps = Convert.ToBase64String(Encoding.UTF8.GetBytes(
-            "{\"os\":\"Windows\",\"browser\":\"Chrome\",\"device\":\"\",\"system_locale\":\"fr-FR\",\"browser_user_agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36\",\"browser_version\":\"128.0.0.0\",\"os_version\":\"10\",\"referrer\":\"\",\"referring_domain\":\"\",\"referrer_current\":\"\",\"referring_domain_current\":\"\",\"release_channel\":\"stable\",\"client_build_number\":330000,\"client_event_source\":null}"));
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Super-Properties", superProps);
+            var superProps = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                "{\"os\":\"Windows\",\"browser\":\"Chrome\",\"device\":\"\",\"system_locale\":\"fr-FR\",\"browser_user_agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36\",\"browser_version\":\"128.0.0.0\",\"os_version\":\"10\",\"referrer\":\"\",\"referring_domain\":\"\",\"referrer_current\":\"\",\"referring_domain_current\":\"\",\"release_channel\":\"stable\",\"client_build_number\":330000,\"client_event_source\":null}"));
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Super-Properties", superProps);
+        }
     }
 
     public async Task StartAsync(CancellationToken externalCt = default)
@@ -78,6 +85,7 @@ public sealed class DiscordRemoteAuthClient : IDisposable
         var encodedPublicKey = Convert.ToBase64String(spki);
 
         _ws = new ClientWebSocket();
+        _ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
         _ws.Options.SetRequestHeader("Origin", "https://discord.com");
         _ws.Options.SetRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36");
 

@@ -49,7 +49,7 @@ public sealed class DiscordRestClient : IDisposable
         if (string.IsNullOrWhiteSpace(user.Id)) return;
         try
         {
-            using var resp = await _http.GetAsync($"{ApiBase}/users/{user.Id}/profile?with_mutual_guilds=false", ct);
+            using var resp = await _http.GetAsync($"{ApiBase}/users/{user.Id}/profile?with_mutual_guilds=true&with_mutual_friends_count=true", ct);
             if (!resp.IsSuccessStatusCode) return;
 
             using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
@@ -74,6 +74,14 @@ public sealed class DiscordRestClient : IDisposable
             {
                 user.PremiumType = rootPtVal;
             }
+            if (root.TryGetProperty("mutual_friends_count", out var mfcEl) && mfcEl.ValueKind == JsonValueKind.Number && mfcEl.TryGetInt32(out int mfcVal))
+            {
+                user.MutualFriendsCount = mfcVal;
+            }
+            if (root.TryGetProperty("mutual_guilds", out var mgEl) && mgEl.ValueKind == JsonValueKind.Array)
+            {
+                user.MutualGuildsCount = mgEl.GetArrayLength();
+            }
 
             if (root.TryGetProperty("user_profile", out var upEl) && upEl.ValueKind == JsonValueKind.Object)
             {
@@ -85,6 +93,18 @@ public sealed class DiscordRestClient : IDisposable
                     user.Banner = upBan.GetString();
                 if (upEl.TryGetProperty("accent_color", out var acEl) && acEl.ValueKind == JsonValueKind.Number && acEl.TryGetInt32(out int acVal))
                     user.AccentColor = acVal;
+                if (upEl.TryGetProperty("theme_colors", out var tcEl) && tcEl.ValueKind == JsonValueKind.Array)
+                {
+                    var tColors = new List<int>();
+                    foreach (var cItem in tcEl.EnumerateArray())
+                    {
+                        if (cItem.ValueKind == JsonValueKind.Number && cItem.TryGetInt32(out int cVal))
+                        {
+                            tColors.Add(cVal);
+                        }
+                    }
+                    if (tColors.Count > 0) user.ThemeColors = tColors;
+                }
             }
 
             if (root.TryGetProperty("badges", out var badgesEl) && badgesEl.ValueKind == JsonValueKind.Array)

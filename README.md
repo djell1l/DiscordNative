@@ -39,11 +39,11 @@ DiscordNative.sln
 
 ## Installation & Distribution
 
-### 1. WinUI 3 Setup (`Diswin-Setup-v0.3.1-win-x64.zip`)
-Download, unzip, and run `Setup.exe`. It is a real Windows 11 installer wizard written in WinUI 3 that sets up the app, drops a shortcut on your Desktop, hooks into your Start Menu, and gets out of your way.
+### 1. Single-File WinUI 3 Setup (`Diswin-Setup-v0.4.1-win-x64.exe`)
+Download and run the single executable installer. It is a genuine Windows 11 setup wizard written in WinUI 3 that unpacks natively, creates a Desktop shortcut, registers in your Start Menu, and gets out of your way.
 
-### 2. Standalone Portable (`Diswin-v0.3.1-win-x64-portable.zip`)
-For the minimalists. Unzip anywhere, run `DiscordNative.App.exe`, and get back to what you were doing.
+### 2. Standalone Portable (`Diswin-v0.4.1-win-x64-portable.zip`)
+For minimalists and portable USB drives. Unzip anywhere, run `DiscordNative.App.exe`, and you're good to go.
 
 ### 3. Automatic Updates
 Diswin watches GitHub Releases on startup. When a new build drops, an in-app banner lets you update and restart in one click.
@@ -85,6 +85,10 @@ AI is the future — why whisper about it on GitHub like it's a dirty secret? Wh
 - **[djell1l](https://github.com/djell1l)** — Lead developer & creator
 - **[Oleglog](https://github.com/Oleglog)** — You get a VIP spot here purely because you're my very first fork (cherish it, you never forget your first). Huge thanks for the QR Remote Auth v2, MFA, and CI work in v0.3.1!
 - **[Claude](https://github.com/anthropics)** ([@anthropics](https://github.com/anthropics)) & **[Gemini](https://github.com/google-gemini)** ([@google-gemini](https://github.com/google-gemini)) via **[Antigravity](https://github.com/google-deepmind)** ([@google-deepmind](https://github.com/google-deepmind)) — AI pair programming collaborators and architecture co-design
+- **[Single-File SFX Setup Architecture](https://github.com/djell1l/Diswin)** — C# pure WinUI 3 self-extracting bootstrap wrapper and deduplicated installer packaging
+- **[Krisp](https://krisp.ai) & Discord Inc.** — Official neural noise cancellation DSP and deep learning models for studio-quality voice
+- **[QRCoder](https://github.com/codebude/QRCoder)** by Raffael Herrmann — Lightweight pure C# QR code generator for Discord Remote Auth v2
+- **[Concentus](https://github.com/lostromb/concentus)** by Logan Stromberg — Pure C# Opus audio codec implementation
 - **[SakuraCord](https://github.com/SakuraCordApp/SakuraCord)** — Concept and native client philosophy
 - **[Files](https://github.com/files-community/Files)** — UI/UX inspiration for WinUI 3 controls and background customization
 

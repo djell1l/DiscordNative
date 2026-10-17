@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace DiscordNative.Protocol.Models;
@@ -17,8 +19,11 @@ public enum DiscordChannelType
     GuildForum = 15,
 }
 
-public sealed class DiscordChannel
+public sealed class DiscordChannel : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
 
@@ -53,6 +58,20 @@ public sealed class DiscordChannel
         or DiscordChannelType.PublicThread
         or DiscordChannelType.PrivateThread
         or DiscordChannelType.AnnouncementThread;
+
+    public bool IsVoiceChannel => Type is DiscordChannelType.GuildVoice or DiscordChannelType.GuildStageVoice;
+
+    [JsonIgnore]
+    public ObservableCollection<DiscordUser> ConnectedVoiceMembers { get; } = new();
+
+    [JsonIgnore]
+    public bool HasConnectedVoiceMembers => ConnectedVoiceMembers.Count > 0;
+
+    public void NotifyVoiceMembersChanged()
+    {
+        OnPropertyChanged(nameof(ConnectedVoiceMembers));
+        OnPropertyChanged(nameof(HasConnectedVoiceMembers));
+    }
 
     /// <summary>Nom d'affichage : pour un DM, on utilise le nom du destinataire.</summary>
     public string DisplayName => Type switch

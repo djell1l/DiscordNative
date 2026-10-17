@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version tag (e.g. v0.3.1)'
+        description: 'Release version tag (e.g. v0.4.1)'
         required: false
-        default: 'v0.3.1'
+        default: 'v0.4.1'
   push:
     tags:
       - 'v*'
@@ -31,11 +31,6 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Build Application
-        shell: powershell
-        run: |
-          .\build.ps1 -Configuration Release -NoRun
-
       - name: Package Release
         id: package
         shell: powershell
@@ -46,4 +41,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Diswin-Release
-          path: dist/*.zip
+          path: dist/*.*

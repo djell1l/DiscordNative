@@ -17,6 +17,7 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
 
     <EnableMsixTooling>false</EnableMsixTooling>
+    <SatelliteResourceLanguages>en-US;fr-FR;fr;en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

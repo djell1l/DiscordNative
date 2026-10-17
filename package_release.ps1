@@ -1,9 +1,53 @@
 $ErrorActionPreference = 'Stop'
-$version = "0.4.0"
+$version = "0.4.1"
 $appReleaseDir = "src\DiscordNative.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64"
 $installerReleaseDir = "src\DiscordNative.Installer\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64"
-$msbuild = "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
-$csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+
+# Dynamically locate Appx tools and MSBuild (works on GitHub Actions Enterprise runner & local machines)
+$appxTools = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio" -Recurse -Filter Microsoft.Build.Packaging.Pri.Tasks.dll -ErrorAction SilentlyContinue |
+    Select-Object -First 1 | ForEach-Object { $_.DirectoryName + "\" }
+
+$msbuild = $null
+if ($appxTools) {
+    $env:AppxMSBuildToolsPath = $appxTools
+    $vsDir = $appxTools
+    for ($i = 0; $i -lt 4; $i++) { $vsDir = Split-Path $vsDir }
+    $candidateMsBuild = Join-Path $vsDir "Current\Bin\MSBuild.exe"
+    if (Test-Path $candidateMsBuild) {
+        $msbuild = $candidateMsBuild
+    }
+}
+
+if (-not $msbuild -or -not (Test-Path $msbuild)) {
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    $msbuild = if (Test-Path $vswhere) {
+        & $vswhere -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+    } else { $null }
+}
+
+if (-not $msbuild -or -not (Test-Path $msbuild)) {
+    $candidates = @(
+        "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+        "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe",
+        "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe"
+    )
+    $msbuild = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+
+if (-not $msbuild -or -not (Test-Path $msbuild)) {
+    throw "MSBuild.exe introuvable. Assurez-vous que Visual Studio 2022 ou les Build Tools sont installés."
+}
+
+$csc = $null
+$roslynCsc = Join-Path (Split-Path $msbuild) "Roslyn\csc.exe"
+if (Test-Path $roslynCsc) {
+    $csc = $roslynCsc
+} else {
+    $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+}
+
+Write-Host "Utilisation de MSBuild : $msbuild" -ForegroundColor Cyan
+Write-Host "Utilisation de CSC     : $csc" -ForegroundColor Cyan
 
 Write-Host "1. Building DiscordNative.App (Release x64 Self-Contained)..."
 & $msbuild "src\DiscordNative.App\DiscordNative.App.csproj" /p:Configuration=Release /p:Platform=x64 /m /v:minimal
@@ -21,6 +65,10 @@ if ($localDiscordKrisp) {
 
 Write-Host "2. Building DiscordNative.Installer (WinUI 3 Setup.exe)..."
 & $msbuild "src\DiscordNative.Installer\DiscordNative.Installer.csproj" /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+
+# Clean up satellite culture clutter folders
+$knownLangs = @("fr-FR", "fr", "en-US", "en")
+Get-ChildItem -Directory $appReleaseDir | Where-Object { $_.Name -match "^[a-z]{2}(-[A-Z]{2,4})?$" -and $_.Name -notin $knownLangs } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "3. Preparing Deduplicated Installer Bundle..."
 if (Test-Path "dist\InstallerBundle") {

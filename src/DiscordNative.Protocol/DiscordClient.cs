@@ -215,6 +215,13 @@ public sealed class DiscordClient : IAsyncDisposable
                         HandlePresenceUpdate(pEl);
                     }
                 }
+                if (evt.Data.TryGetProperty("voice_states", out var gVsArray) && gVsArray.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var vs in gVsArray.EnumerateArray())
+                    {
+                        HandleVoiceStateUpdate(vs);
+                    }
+                }
                 var guild = evt.Data.Deserialize<DiscordGuild>(JsonOptions);
                 if (guild is not null && !string.IsNullOrEmpty(guild.Name))
                 {

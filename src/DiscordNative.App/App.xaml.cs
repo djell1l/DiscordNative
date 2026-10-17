@@ -18,6 +18,18 @@ public partial class App : Application
         if (theme == "Light") RequestedTheme = ApplicationTheme.Light;
         else if (theme == "Dark") RequestedTheme = ApplicationTheme.Dark;
 
+        var lang = Settings.Current.Language;
+        if (!string.IsNullOrEmpty(lang) && lang != "Default")
+        {
+            try
+            {
+                Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = lang;
+                System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo(lang);
+                System.Threading.Thread.CurrentThread.CurrentUICulture = new System.Globalization.CultureInfo(lang);
+            }
+            catch { }
+        }
+
         InitializeComponent();
         this.UnhandledException += OnAppUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;

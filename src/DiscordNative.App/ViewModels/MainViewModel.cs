@@ -225,6 +225,8 @@ public sealed partial class MainViewModel : ObservableObject
     public Microsoft.UI.Xaml.Visibility ShowingGuildChannels => _showingFriends ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
     public Microsoft.UI.Xaml.Visibility ShowingFriendsView => _showingFriends ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
+    private readonly Microsoft.UI.Xaml.DispatcherTimer _rpcTickerTimer = new();
+
     public MainViewModel(DiscordClient client)
     {
         _client = client;
@@ -238,6 +240,18 @@ public sealed partial class MainViewModel : ObservableObject
         _client.VoiceSpeakingChanged += OnVoiceSpeakingChanged;
         _client.PresenceUpdated += OnPresenceUpdated;
         _client.Friends.CollectionChanged += (_, _) => RefreshFilteredFriends();
+
+        _rpcTickerTimer.Interval = TimeSpan.FromSeconds(1);
+        _rpcTickerTimer.Tick += (_, _) =>
+        {
+            if (CurrentUserRichPresence?.HasElapsed == true)
+            {
+                CurrentUserRichPresence.NotifyTimeChanged();
+                OnPropertyChanged(nameof(CurrentUserRpcElapsed));
+                CurrentUser?.NotifyActivityTimesChanged();
+            }
+        };
+        _rpcTickerTimer.Start();
     }
 
     private void OnVoiceSpeakingChanged(string userId, bool isSpeaking)
@@ -484,6 +498,11 @@ public sealed partial class MainViewModel : ObservableObject
                     System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DiscordNative_crash.log"),
                     $"[{DateTime.Now}] GetGuildChannelsAsync failed: {ex}\n\n");
             }
+        }
+
+        foreach (var ch in Channels.Where(c => c.IsVoiceChannel))
+        {
+            SyncChannelVoiceMembers(ch);
         }
 
         FilteredChannels.Clear();
@@ -898,8 +917,34 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void OnVoiceParticipantsChanged(string channelId)
     {
-        if (channelId != _selectedChannel?.Id) return;
-        Protocol.App.RunOnUiThread(() => RefreshVoiceParticipants(channelId));
+        Protocol.App.RunOnUiThread(() =>
+        {
+            if (channelId == _selectedChannel?.Id)
+            {
+                RefreshVoiceParticipants(channelId);
+            }
+
+            var ch = Channels.FirstOrDefault(c => c.Id == channelId);
+            if (ch != null)
+            {
+                SyncChannelVoiceMembers(ch);
+            }
+        });
+    }
+
+    private void SyncChannelVoiceMembers(DiscordChannel channel)
+    {
+        var members = _client.GetVoiceChannelParticipants(channel.Id);
+        channel.ConnectedVoiceMembers.Clear();
+        var seen = new HashSet<string>();
+        foreach (var m in members)
+        {
+            if (seen.Add(m.Id))
+            {
+                channel.ConnectedVoiceMembers.Add(m);
+            }
+        }
+        channel.NotifyVoiceMembersChanged();
     }
 
     private void RefreshVoiceParticipants(string channelId)

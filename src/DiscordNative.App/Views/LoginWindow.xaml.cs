@@ -174,8 +174,17 @@ public sealed partial class LoginWindow : Window
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            QrLoadingRing.IsActive = false;
-            QrStatusText.Text = "Session QR expirée ou refusée. Cliquez sur Actualiser pour réessayer.";
+            if (QrPanel.Visibility == Visibility.Visible)
+            {
+                QrStatusText.Text = "Actualisation automatique du code QR...";
+                StartQrFlow();
+            }
+            else
+            {
+                QrCodeImage.Visibility = Visibility.Collapsed;
+                QrLoadingRing.IsActive = false;
+                QrStatusText.Text = "Session QR expirée ou refusée. Cliquez sur Actualiser pour réessayer.";
+            }
         });
     }
 

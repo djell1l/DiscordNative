@@ -52,6 +52,10 @@ public sealed partial class SettingsWindow : Window
             .OfType<ComboBoxItem>()
             .FirstOrDefault(i => (string)i.Tag == current.ThemeMode) ?? ThemeCombo.Items[0];
 
+        LanguageCombo.SelectedItem = LanguageCombo.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(i => (string)i.Tag == current.Language) ?? LanguageCombo.Items[0];
+
         UpdateChannelCombo.SelectedItem = UpdateChannelCombo.Items
             .OfType<ComboBoxItem>()
             .FirstOrDefault(i => (string)i.Tag == current.UpdateChannel) ?? UpdateChannelCombo.Items[0];
@@ -288,6 +292,32 @@ public sealed partial class SettingsWindow : Window
 
             if (Content is FrameworkElement root) root.RequestedTheme = theme;
             if (App.MainAppWindow?.Content is FrameworkElement mainRoot) mainRoot.RequestedTheme = theme;
+        }
+    }
+
+    private void OnLanguageChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isInitializing) return;
+        if (LanguageCombo.SelectedItem is ComboBoxItem item)
+        {
+            var lang = (string)item.Tag;
+            _settings.Current.Language = lang;
+            _settings.Save();
+
+            try
+            {
+                if (lang != "Default")
+                {
+                    Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = lang;
+                    System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo(lang);
+                    System.Threading.Thread.CurrentThread.CurrentUICulture = new System.Globalization.CultureInfo(lang);
+                }
+                else
+                {
+                    Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = string.Empty;
+                }
+            }
+            catch { }
         }
     }
 

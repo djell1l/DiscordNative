@@ -25,9 +25,22 @@
 
                         <ComboBox x:Name="ThemeCombo" Header="Thème de l'application"
                                   SelectionChanged="OnThemeChanged" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="Système" Tag="Default" />
+                            <ComboBoxItem Content="Système (Par défaut Windows)" Tag="Default" />
                             <ComboBoxItem Content="Clair" Tag="Light" />
                             <ComboBoxItem Content="Sombre" Tag="Dark" />
+                        </ComboBox>
+
+                        <ComboBox x:Name="LanguageCombo" Header="Langue de l'application"
+                                  SelectionChanged="OnLanguageChanged" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="Système (Par défaut Windows)" Tag="Default" />
+                            <ComboBoxItem Content="Français (France)" Tag="fr-FR" />
+                            <ComboBoxItem Content="English (US)" Tag="en-US" />
+                            <ComboBoxItem Content="Deutsch (Allemand)" Tag="de-DE" />
+                            <ComboBoxItem Content="Español (Espagnol)" Tag="es-ES" />
+                            <ComboBoxItem Content="Italiano (Italien)" Tag="it-IT" />
+                            <ComboBoxItem Content="日本語 (Japonais)" Tag="ja-JP" />
+                            <ComboBoxItem Content="Português (Brésil)" Tag="pt-BR" />
+                            <ComboBoxItem Content="Русский (Russe)" Tag="ru-RU" />
                         </ComboBox>
 
                         <StackPanel Spacing="4">
@@ -153,7 +166,7 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="Diswin v0.3.3 — Client WinUI 3 natif non officiel, non affilié à Discord Inc." Opacity="0.5" FontSize="11" />
+                <TextBlock Text="Diswin v0.4.1 [Bleeding Edge] — Client WinUI 3 natif 100% C# non officiel, non affilié à Discord Inc." Opacity="0.5" FontSize="11" />
 
             </StackPanel>
         </ScrollViewer>

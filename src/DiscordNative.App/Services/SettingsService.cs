@@ -11,6 +11,7 @@ public sealed class AppSettings
     public string? SavedToken { get; set; }
 
     public string ThemeMode { get; set; } = "Default"; // Default | Light | Dark
+    public string Language { get; set; } = "Default"; // Default (Système) | fr-FR | en-US | de-DE | es-ES | it-IT | ja-JP | pt-BR | ru-RU
     public string AccentColor { get; set; } = "#5865F2"; // Blurple par défaut
     public string? BackgroundImagePath { get; set; }
     public double BackgroundOpacity { get; set; } = 0.35;
@@ -103,7 +104,7 @@ public sealed class SettingsService
         }
         catch { }
         
-        return new AppSettings { ThemeMode = "Light" };
+        return new AppSettings { ThemeMode = "Default", Language = "Default" };
     }
 
     public void Save()
