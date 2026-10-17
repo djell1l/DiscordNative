@@ -505,6 +505,15 @@ public sealed partial class MainViewModel : ObservableObject
             foreach (var channel in guild.Channels.Where(c => c.IsTextLike || c.Type == DiscordChannelType.GuildVoice).OrderBy(c => c.Position))
             {
                 channel.GuildId ??= guild.Id;
+                if (!string.IsNullOrEmpty(channel.LastMessageId) && _client.ReadLastMessages.TryGetValue(channel.Id, out var rMid))
+                {
+                    if (ulong.TryParse(channel.LastMessageId, out var cMid) &&
+                        ulong.TryParse(rMid, out var readMid) &&
+                        cMid > readMid)
+                    {
+                        channel.HasUnread = true;
+                    }
+                }
                 Channels.Add(channel);
             }
         }
@@ -517,6 +526,15 @@ public sealed partial class MainViewModel : ObservableObject
                 foreach (var channel in fetchedChannels.Where(c => c.IsTextLike || c.Type == DiscordChannelType.GuildVoice).OrderBy(c => c.Position))
                 {
                     channel.GuildId ??= guild.Id;
+                    if (!string.IsNullOrEmpty(channel.LastMessageId) && _client.ReadLastMessages.TryGetValue(channel.Id, out var rMid))
+                    {
+                        if (ulong.TryParse(channel.LastMessageId, out var cMid) &&
+                            ulong.TryParse(rMid, out var readMid) &&
+                            cMid > readMid)
+                        {
+                            channel.HasUnread = true;
+                        }
+                    }
                     Channels.Add(channel);
                 }
             }

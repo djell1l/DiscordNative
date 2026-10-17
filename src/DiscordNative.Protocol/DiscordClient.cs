@@ -84,6 +84,7 @@ public sealed class DiscordClient : IAsyncDisposable
 
     public string? ActiveChannelId { get; set; }
     public string? ActiveGuildId { get; set; }
+    public ConcurrentDictionary<string, string> ReadLastMessages { get; } = new();
 
     public event Action<DiscordMessage>? MessageReceived;
     public event Action<DiscordMessage>? MessageUpdated;
@@ -837,6 +838,15 @@ public sealed class DiscordClient : IAsyncDisposable
                             if (entry.TryGetProperty("id", out var chIdEl) && chIdEl.ValueKind == JsonValueKind.String)
                             {
                                 var chId = chIdEl.GetString()!;
+                                if (entry.TryGetProperty("last_message_id", out var lmidEl) && lmidEl.ValueKind == JsonValueKind.String)
+                                {
+                                    var lmid = lmidEl.GetString();
+                                    if (!string.IsNullOrEmpty(lmid))
+                                    {
+                                        ReadLastMessages[chId] = lmid;
+                                    }
+                                }
+
                                 int mc = 0;
                                 if (entry.TryGetProperty("mention_count", out var mcProp) && mcProp.TryGetInt32(out var countVal))
                                 {
@@ -866,10 +876,24 @@ public sealed class DiscordClient : IAsyncDisposable
                                     if (channelMentions.TryGetValue(ch.Id, out var count))
                                     {
                                         totalMentions += count;
+                                        ch.MentionCount = count;
                                     }
                                     if (unreadChannels.Contains(ch.Id))
                                     {
                                         hasUnread = true;
+                                        ch.HasUnread = true;
+                                    }
+                                    else if (!string.IsNullOrEmpty(ch.LastMessageId) &&
+                                             ReadLastMessages.TryGetValue(ch.Id, out var rMid) &&
+                                             !string.IsNullOrEmpty(rMid))
+                                    {
+                                        if (ulong.TryParse(ch.LastMessageId, out var cMid) &&
+                                            ulong.TryParse(rMid, out var readMid) &&
+                                            cMid > readMid)
+                                        {
+                                            hasUnread = true;
+                                            ch.HasUnread = true;
+                                        }
                                     }
                                 }
                             }

@@ -126,11 +126,37 @@ public sealed class DiscordGuild : INotifyPropertyChanged
         }
     }
 
+    private bool _isHovered;
     [JsonIgnore]
-    public bool HasUnreadOrSelected => IsSelected || HasMentions || HasUnread;
+    public bool IsHovered
+    {
+        get => _isHovered;
+        set
+        {
+            if (_isHovered != value)
+            {
+                _isHovered = value;
+                OnPropertyChanged(nameof(IsHovered));
+                OnPropertyChanged(nameof(IndicatorHeight));
+                OnPropertyChanged(nameof(HasUnreadOrSelected));
+            }
+        }
+    }
 
     [JsonIgnore]
-    public double IndicatorHeight => IsSelected ? 40 : (HasMentions || HasUnread ? 8 : 0);
+    public bool HasUnreadOrSelected => IsSelected || IsHovered || HasMentions || HasUnread;
+
+    [JsonIgnore]
+    public double IndicatorHeight
+    {
+        get
+        {
+            if (IsSelected) return 40;
+            if (IsHovered) return 20;
+            if (HasMentions || HasUnread) return 8;
+            return 0;
+        }
+    }
 
     private bool _hasVoiceActivity;
     [JsonIgnore]

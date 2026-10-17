@@ -903,6 +903,10 @@ public sealed partial class MainWindowContent : UserControl
     {
         if (sender is FrameworkElement fe)
         {
+            if (fe.DataContext is DiscordGuild g)
+            {
+                g.IsHovered = true;
+            }
             ControlBitmapInTree(fe, play: true);
         }
     }
@@ -911,6 +915,10 @@ public sealed partial class MainWindowContent : UserControl
     {
         if (sender is FrameworkElement fe)
         {
+            if (fe.DataContext is DiscordGuild g)
+            {
+                g.IsHovered = false;
+            }
             ControlBitmapInTree(fe, play: false);
         }
     }

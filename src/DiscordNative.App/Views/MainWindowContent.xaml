@@ -111,6 +111,18 @@
                                 <Setter Property="Width" Value="72" />
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                 <Setter Property="VerticalContentAlignment" Value="Center" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListViewItem">
+                                            <ContentPresenter Content="{TemplateBinding Content}"
+                                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                              HorizontalAlignment="Stretch"
+                                                              VerticalAlignment="Center"
+                                                              Margin="0"
+                                                              Padding="0" />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
                             </Style>
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
@@ -135,9 +147,10 @@
                                         </MenuFlyout>
                                     </Grid.ContextFlyout>
 
-                                    <!-- Pilule blanche sur le bord gauche (Non lu = petit point 8px, Sélectionné = barre 40px) -->
+                                    <!-- Pilule blanche sur le bord gauche (Non lu = petit point 8px, Survol = 20px, Sélectionné = barre 40px) -->
                                     <Border HorizontalAlignment="Left" VerticalAlignment="Center"
-                                            Width="4" Height="{x:Bind IndicatorHeight, Mode=OneWay}"
+                                            Width="8" Height="{x:Bind IndicatorHeight, Mode=OneWay}"
+                                            Margin="-4,0,0,0"
                                             CornerRadius="0,4,4,0" Background="White"
                                             Visibility="{x:Bind HasUnreadOrSelected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
 
