@@ -221,18 +221,60 @@ public sealed class DiscordUser : INotifyPropertyChanged
         }
     }
 
-    public string DisplayName => GlobalName ?? Username;
+    [JsonPropertyName("nick")]
+    public string? ServerNick { get; set; }
 
-    public bool IsAnimatedAvatar => Avatar is not null && Avatar.StartsWith("a_");
+    [JsonPropertyName("guild_avatar")]
+    public string? ServerAvatar { get; set; }
+
+    [JsonIgnore]
+    public string? GuildIdForAvatar { get; set; }
+
+    public string DisplayName => ServerNick ?? GlobalName ?? Username;
+
+    public void NotifyProfileChanged()
+    {
+        OnPropertyChanged(nameof(Username));
+        OnPropertyChanged(nameof(GlobalName));
+        OnPropertyChanged(nameof(ServerNick));
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(Avatar));
+        OnPropertyChanged(nameof(ServerAvatar));
+        OnPropertyChanged(nameof(AvatarUrl));
+        OnPropertyChanged(nameof(StaticAvatarUrl));
+        OnPropertyChanged(nameof(AnimatedAvatarUrl));
+    }
+
+    public bool IsAnimatedAvatar => (ServerAvatar ?? Avatar) is string av && av.StartsWith("a_");
     public bool IsAnimatedBanner => Banner is not null && Banner.StartsWith("a_");
 
-    public string StaticAvatarUrl => Avatar is null
-        ? $"https://cdn.discordapp.com/embed/avatars/{(int.TryParse(Discriminator, out var d) ? d % 5 : 0)}.png"
-        : $"https://cdn.discordapp.com/avatars/{Id}/{Avatar}.png?size=128";
+    public string StaticAvatarUrl
+    {
+        get
+        {
+            if (ServerAvatar is not null && GuildIdForAvatar is not null)
+            {
+                return $"https://cdn.discordapp.com/guilds/{GuildIdForAvatar}/users/{Id}/avatars/{ServerAvatar}.png?size=128";
+            }
+            return Avatar is null
+                ? $"https://cdn.discordapp.com/embed/avatars/{(int.TryParse(Discriminator, out var d) ? d % 5 : 0)}.png"
+                : $"https://cdn.discordapp.com/avatars/{Id}/{Avatar}.png?size=128";
+        }
+    }
 
-    public string AnimatedAvatarUrl => Avatar is null
-        ? StaticAvatarUrl
-        : $"https://cdn.discordapp.com/avatars/{Id}/{Avatar}.{(Avatar.StartsWith("a_") ? "gif" : "png")}?size=128";
+    public string AnimatedAvatarUrl
+    {
+        get
+        {
+            if (ServerAvatar is not null && GuildIdForAvatar is not null)
+            {
+                return $"https://cdn.discordapp.com/guilds/{GuildIdForAvatar}/users/{Id}/avatars/{ServerAvatar}.{(ServerAvatar.StartsWith("a_") ? "gif" : "png")}?size=128";
+            }
+            return Avatar is null
+                ? StaticAvatarUrl
+                : $"https://cdn.discordapp.com/avatars/{Id}/{Avatar}.{(Avatar.StartsWith("a_") ? "gif" : "png")}?size=128";
+        }
+    }
 
     public string AvatarUrl => AnimatedAvatarUrl;
 

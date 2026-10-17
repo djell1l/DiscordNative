@@ -936,7 +936,7 @@
                                                 <!-- Avatar du participant -->
                                                 <Ellipse Width="88" Height="88" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                     <Ellipse.Fill>
-                                                        <ImageBrush ImageSource="{x:Bind AvatarUrl, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
+                                                        <ImageBrush ImageSource="{x:Bind AvatarUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
                                                     </Ellipse.Fill>
                                                 </Ellipse>
 
@@ -959,7 +959,7 @@
                                                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                                         <Ellipse Width="8" Height="8" Fill="#23A55A" VerticalAlignment="Center"
                                                                  Opacity="{x:Bind SpeakingRingOpacity, Mode=OneWay}" />
-                                                        <TextBlock Text="{x:Bind DisplayName}" Foreground="White" FontWeight="SemiBold" FontSize="12" MaxWidth="145" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" Foreground="White" FontWeight="SemiBold" FontSize="12" MaxWidth="145" TextTrimming="CharacterEllipsis" />
                                                     </StackPanel>
                                                 </Border>
 

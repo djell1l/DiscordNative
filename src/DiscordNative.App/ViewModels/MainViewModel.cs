@@ -473,6 +473,9 @@ public sealed partial class MainViewModel : ObservableObject
         SelectedGuildName = guild.Name;
         Channels.Clear();
 
+        // Demander à la Gateway de s'abonner au serveur (Opcode 14) pour recevoir les mises à jour vocales et les membres en temps réel
+        _ = _client.SubscribeGuildAsync(guild.Id);
+
         if (guild.Channels.Count > 0)
         {
             foreach (var channel in guild.Channels.Where(c => c.IsTextLike || c.Type == DiscordChannelType.GuildVoice).OrderBy(c => c.Position))
@@ -527,9 +530,11 @@ public sealed partial class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(TextViewVisibility));
             OnPropertyChanged(nameof(MemberListVisibility));
 
-            if (channel.GuildId != null)
+            var targetGuildId = channel.GuildId ?? _selectedGuild?.Id;
+            if (targetGuildId != null)
             {
-                _ = _client.JoinVoiceChannelAsync(channel.GuildId, channel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
+                channel.GuildId ??= targetGuildId;
+                _ = _client.JoinVoiceChannelAsync(targetGuildId, channel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
                 IsVoiceConnected = true;
                 ConnectedVoiceChannelName = channel.DisplayName;
             }

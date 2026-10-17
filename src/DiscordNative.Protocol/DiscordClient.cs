@@ -67,6 +67,12 @@ public sealed class DiscordClient : IAsyncDisposable
     // Suivi en temps réel des membres présents dans chaque salon vocal (channelId -> liste des utilisateurs)
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, DiscordUser>> _voiceChannelMembers = new();
 
+    // Cache des membres par serveur (guildId -> (userId -> DiscordUser))
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, DiscordUser>> _guildMembers = new();
+
+    // Cache global des utilisateurs par userId
+    private readonly ConcurrentDictionary<string, DiscordUser> _userCache = new();
+
     // Cache temps réel de la présence (statut + Rich Presence / Activités) par userId
     private readonly ConcurrentDictionary<string, (string Status, List<DiscordActivity> Activities)> _userPresences = new();
 
@@ -208,6 +214,17 @@ public sealed class DiscordClient : IAsyncDisposable
                 }
                 break;
             case "GUILD_CREATE":
+                var guildIdStr = evt.Data.TryGetProperty("id", out var gIdEl) ? gIdEl.GetString() : null;
+
+                // 1. Cacher d'abord tous les membres du serveur
+                if (evt.Data.TryGetProperty("members", out var gMembersEl) && gMembersEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var mEl in gMembersEl.EnumerateArray())
+                    {
+                        CacheGuildMember(guildIdStr, mEl);
+                    }
+                }
+
                 if (evt.Data.TryGetProperty("presences", out var gPresEl) && gPresEl.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var pEl in gPresEl.EnumerateArray())
@@ -219,7 +236,7 @@ public sealed class DiscordClient : IAsyncDisposable
                 {
                     foreach (var vs in gVsArray.EnumerateArray())
                     {
-                        HandleVoiceStateUpdate(vs);
+                        HandleVoiceStateUpdate(vs, guildIdStr);
                     }
                 }
                 var guild = evt.Data.Deserialize<DiscordGuild>(JsonOptions);
@@ -241,6 +258,16 @@ public sealed class DiscordClient : IAsyncDisposable
                             SyncGuildsCollection(sorted);
                         }
                     });
+                }
+                break;
+            case "GUILD_MEMBERS_CHUNK":
+                if (evt.Data.TryGetProperty("guild_id", out var chunkGidEl) && evt.Data.TryGetProperty("members", out var chunkMemArr) && chunkMemArr.ValueKind == JsonValueKind.Array)
+                {
+                    var chunkGid = chunkGidEl.GetString();
+                    foreach (var mEl in chunkMemArr.EnumerateArray())
+                    {
+                        CacheGuildMember(chunkGid, mEl);
+                    }
                 }
                 break;
             case "GUILD_DELETE":
@@ -272,13 +299,55 @@ public sealed class DiscordClient : IAsyncDisposable
         }
     }
 
-    private void HandleVoiceStateUpdate(JsonElement data)
+    public void CacheGuildMember(string? guildId, JsonElement memberEl)
+    {
+        try
+        {
+            if (memberEl.ValueKind != JsonValueKind.Object) return;
+            if (!memberEl.TryGetProperty("user", out var uEl) || uEl.ValueKind != JsonValueKind.Object) return;
+
+            var user = uEl.Deserialize<DiscordUser>(JsonOptions);
+            if (user == null || string.IsNullOrEmpty(user.Id)) return;
+
+            if (memberEl.TryGetProperty("nick", out var nickEl) && nickEl.ValueKind == JsonValueKind.String)
+            {
+                user.ServerNick = nickEl.GetString();
+            }
+
+            if (memberEl.TryGetProperty("avatar", out var avEl) && avEl.ValueKind == JsonValueKind.String)
+            {
+                user.ServerAvatar = avEl.GetString();
+                user.GuildIdForAvatar = guildId;
+            }
+
+            _userCache[user.Id] = user;
+
+            if (!string.IsNullOrEmpty(guildId))
+            {
+                var dict = _guildMembers.GetOrAdd(guildId, _ => new ConcurrentDictionary<string, DiscordUser>());
+                dict[user.Id] = user;
+            }
+        }
+        catch { }
+    }
+
+    public Task SubscribeGuildAsync(string guildId, CancellationToken ct = default)
+    {
+        if (_gateway is not null && !string.IsNullOrEmpty(guildId))
+        {
+            return _gateway.SendGuildSubscriptionsAsync(guildId, ct);
+        }
+        return Task.CompletedTask;
+    }
+
+    private void HandleVoiceStateUpdate(JsonElement data, string? fallbackGuildId = null)
     {
         try
         {
             var userId = data.TryGetProperty("user_id", out var uidEl) ? uidEl.GetString() : null;
             var channelId = data.TryGetProperty("channel_id", out var cidEl) && cidEl.ValueKind == JsonValueKind.String ? cidEl.GetString() : null;
             var sessionId = data.TryGetProperty("session_id", out var sidEl) ? sidEl.GetString() : null;
+            var guildId = data.TryGetProperty("guild_id", out var gidEl) && gidEl.ValueKind == JsonValueKind.String ? gidEl.GetString() : fallbackGuildId;
 
             if (string.IsNullOrWhiteSpace(userId)) return;
 
@@ -288,19 +357,55 @@ public sealed class DiscordClient : IAsyncDisposable
             }
 
             DiscordUser? userObj = null;
-            if (data.TryGetProperty("member", out var memEl) && memEl.ValueKind == JsonValueKind.Object &&
-                memEl.TryGetProperty("user", out var uEl) && uEl.ValueKind == JsonValueKind.Object)
+
+            // 1. Si le member est fourni directement dans le voice state
+            if (data.TryGetProperty("member", out var memEl) && memEl.ValueKind == JsonValueKind.Object)
             {
-                userObj = uEl.Deserialize<DiscordUser>(JsonOptions);
+                CacheGuildMember(guildId, memEl);
+                if (!string.IsNullOrEmpty(guildId) && _guildMembers.TryGetValue(guildId, out var gDict) && gDict.TryGetValue(userId, out var mUser))
+                {
+                    userObj = mUser;
+                }
+                else if (_userCache.TryGetValue(userId, out var cUser))
+                {
+                    userObj = cUser;
+                }
             }
+
+            // 2. Si non trouvé, vérifier dans le cache du serveur
+            if (userObj == null && !string.IsNullOrEmpty(guildId) && _guildMembers.TryGetValue(guildId, out var gmDict) && gmDict.TryGetValue(userId, out var gUser))
+            {
+                userObj = gUser;
+            }
+
+            // 3. Cache global
+            if (userObj == null && _userCache.TryGetValue(userId, out var cachedUser))
+            {
+                userObj = cachedUser;
+            }
+
+            // 4. CurrentUser
             if (userObj == null && userId == CurrentUser?.Id)
             {
                 userObj = CurrentUser;
             }
+
+            // 5. Friends
             if (userObj == null)
             {
-                userObj = Friends.Select(f => f.User).FirstOrDefault(u => u.Id == userId)
-                          ?? new DiscordUser { Id = userId!, Username = $"Utilisateur {userId![..Math.Min(4, userId.Length)]}" };
+                userObj = Friends.Select(f => f.User).FirstOrDefault(u => u.Id == userId);
+            }
+
+            bool needsResolution = false;
+            // 6. Fallback si inconnu
+            if (userObj == null)
+            {
+                userObj = new DiscordUser { Id = userId!, Username = $"Utilisateur {userId![..Math.Min(4, userId.Length)]}" };
+                needsResolution = true;
+            }
+            else if (userObj.Username.StartsWith("Utilisateur ") && userObj.Username.Length <= 16 && string.IsNullOrEmpty(userObj.GlobalName) && string.IsNullOrEmpty(userObj.ServerNick))
+            {
+                needsResolution = true;
             }
 
             bool selfStream = data.TryGetProperty("self_stream", out var ssEl) && ssEl.ValueKind == JsonValueKind.True;
@@ -318,12 +423,15 @@ public sealed class DiscordClient : IAsyncDisposable
                 userObj.IsVoiceDeafened = selfDeaf;
             });
 
-            // Retirer l'utilisateur de tous les salons vocaux précédents
+            // Retirer l'utilisateur de TOUS les autres salons vocaux que celui rejoint (ou de tous s'il a quitté)
             foreach (var kvp in _voiceChannelMembers)
             {
-                if (kvp.Value.TryRemove(userId!, out _))
+                if (kvp.Key != channelId)
                 {
-                    VoiceParticipantsChanged?.Invoke(kvp.Key);
+                    if (kvp.Value.TryRemove(userId!, out _))
+                    {
+                        VoiceParticipantsChanged?.Invoke(kvp.Key);
+                    }
                 }
             }
 
@@ -333,6 +441,52 @@ public sealed class DiscordClient : IAsyncDisposable
                 var dict = _voiceChannelMembers.GetOrAdd(channelId!, _ => new ConcurrentDictionary<string, DiscordUser>());
                 dict[userId!] = userObj;
                 VoiceParticipantsChanged?.Invoke(channelId!);
+
+                if (needsResolution)
+                {
+                    _ = ResolveVoiceParticipantProfileAsync(guildId, channelId!, userId!, userObj);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private async Task ResolveVoiceParticipantProfileAsync(string? guildId, string channelId, string userId, DiscordUser placeholderUser)
+    {
+        try
+        {
+            DiscordUser? resolved = null;
+            if (!string.IsNullOrEmpty(guildId))
+            {
+                resolved = await Rest.GetGuildMemberAsync(guildId, userId);
+            }
+            if (resolved == null)
+            {
+                resolved = await Rest.GetUserAsync(userId);
+            }
+
+            if (resolved != null && !string.IsNullOrEmpty(resolved.Username))
+            {
+                App.RunOnUiThread(() =>
+                {
+                    placeholderUser.Username = resolved.Username;
+                    placeholderUser.GlobalName = resolved.GlobalName;
+                    placeholderUser.Discriminator = resolved.Discriminator;
+                    placeholderUser.Avatar = resolved.Avatar;
+                    placeholderUser.ServerNick = resolved.ServerNick;
+                    placeholderUser.ServerAvatar = resolved.ServerAvatar;
+                    placeholderUser.GuildIdForAvatar = resolved.GuildIdForAvatar ?? guildId;
+                    placeholderUser.NotifyProfileChanged();
+                });
+
+                _userCache[userId] = placeholderUser;
+                if (!string.IsNullOrEmpty(guildId))
+                {
+                    var gm = _guildMembers.GetOrAdd(guildId, _ => new ConcurrentDictionary<string, DiscordUser>());
+                    gm[userId] = placeholderUser;
+                }
+
+                VoiceParticipantsChanged?.Invoke(channelId);
             }
         }
         catch { }
@@ -451,6 +605,13 @@ public sealed class DiscordClient : IAsyncDisposable
                     if (string.IsNullOrEmpty(g.Name) && props.TryGetProperty("name", out var n)) g.Name = n.GetString() ?? "";
                     if (g.Icon is null && props.TryGetProperty("icon", out var i) && i.ValueKind == JsonValueKind.String) g.Icon = i.GetString();
                 }
+                if (gEl.TryGetProperty("members", out var readyMembArray) && readyMembArray.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var mEl in readyMembArray.EnumerateArray())
+                    {
+                        CacheGuildMember(g.Id, mEl);
+                    }
+                }
                 if (gEl.TryGetProperty("presences", out var gpArray) && gpArray.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var pEl in gpArray.EnumerateArray())
@@ -462,7 +623,7 @@ public sealed class DiscordClient : IAsyncDisposable
                 {
                     foreach (var vs in vsArray.EnumerateArray())
                     {
-                        HandleVoiceStateUpdate(vs);
+                        HandleVoiceStateUpdate(vs, g.Id);
                     }
                 }
                 if (!string.IsNullOrEmpty(g.Name))
