@@ -25,6 +25,7 @@ public sealed class AppSettings
     public bool ShowNotifications { get; set; } = true;
     public bool StartMinimized { get; set; } = false;
     public bool EnableKrispNoiseSuppression { get; set; } = true;
+    public Dictionary<string, string> UserNotes { get; set; } = new();
 }
 
 /// <summary>

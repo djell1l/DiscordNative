@@ -9,6 +9,7 @@ namespace DiscordNative.App.ViewModels;
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly DiscordClient _client;
+    public DiscordClient Client => _client;
     private DiscordGuild? _selectedGuild;
     private DiscordChannel? _selectedChannel;
     private bool _showingFriends;
@@ -863,6 +864,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 var idx = Messages.IndexOf(existing);
                 message.ShowHeader = existing.ShowHeader;
+                message.IsOwnMessage = _client.CurrentUser != null && message.Author.Id == _client.CurrentUser.Id;
                 Messages[idx] = message;
             }
         });
@@ -903,6 +905,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void ProcessMessageForGrouping(DiscordMessage current, DiscordMessage? previous)
     {
+        current.IsOwnMessage = _client.CurrentUser != null && current.Author.Id == _client.CurrentUser.Id;
         if (previous == null) return;
         if (!current.IsNormal || !previous.IsNormal) return;
         if (current.IsReply) return; // Toujours afficher l'en-tête pour une réponse

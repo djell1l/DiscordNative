@@ -432,13 +432,19 @@
                                                 </Border>
                                             </Border>
 
-                                            <!-- Avatar rond qui chevauche la bannière -->
-                                            <Ellipse Width="80" Height="80" Margin="16,76,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                     StrokeThickness="5" Stroke="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-                                                <Ellipse.Fill>
-                                                    <ImageBrush ImageSource="{x:Bind ViewModel.CurrentUserAvatarUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
-                                                </Ellipse.Fill>
-                                            </Ellipse>
+                                            <!-- Avatar rond qui chevauche la bannière (cliquable pour ouvrir la vue complète) -->
+                                            <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="40"
+                                                    Margin="16,76,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                    ToolTipService.ToolTip="Afficher le profil complet"
+                                                    Tag="{x:Bind ViewModel.CurrentUser, Mode=OneWay}"
+                                                    Click="OnOpenFullUserProfileFromPopoutClicked">
+                                                <Ellipse Width="80" Height="80"
+                                                         StrokeThickness="5" Stroke="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                                                    <Ellipse.Fill>
+                                                        <ImageBrush ImageSource="{x:Bind ViewModel.CurrentUserAvatarUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
+                                                    </Ellipse.Fill>
+                                                </Ellipse>
+                                            </Button>
 
                                             <!-- Pastille d'état sur l'avatar -->
                                             <Ellipse Width="18" Height="18" Margin="74,136,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
@@ -699,7 +705,8 @@
                                     </Flyout>
                                 </Button.Flyout>
                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                    <Grid Width="34" Height="34" PointerEntered="OnAvatarPointerEntered" PointerExited="OnAvatarPointerExited">
+                                    <Grid Width="34" Height="34" PointerEntered="OnAvatarPointerEntered" PointerExited="OnAvatarPointerExited"
+                                          DoubleTapped="OnCurrentUserAvatarDoubleTapped" ToolTipService.ToolTip="Double-cliquez pour afficher votre profil complet">
                                         <Ellipse Fill="{ThemeResource ControlFillColorSecondaryBrush}" />
                                         <Ellipse>
                                             <Ellipse.Fill>
@@ -1039,36 +1046,356 @@
                             <DataTemplate x:DataType="models:DiscordMessage">
                                 <StackPanel Margin="0,2,0,6" Spacing="2">
                                     <StackPanel.ContextFlyout>
-                                        <MenuFlyout>
-                                            <MenuFlyoutItem Text="Répondre" Click="OnReplyMessageClicked">
-                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE97A;" /></MenuFlyoutItem.Icon>
-                                            </MenuFlyoutItem>
-                                            <MenuFlyoutItem Text="Modifier le message" Click="OnEditMessageClicked">
-                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE70F;" /></MenuFlyoutItem.Icon>
-                                            </MenuFlyoutItem>
-                                            <MenuFlyoutItem Text="Épingler / Désépingler" Click="OnTogglePinMessageClicked">
-                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE718;" /></MenuFlyoutItem.Icon>
-                                            </MenuFlyoutItem>
-                                            <MenuFlyoutItem Text="Copier le message" Click="OnCopyMessageTextClicked">
-                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
-                                            </MenuFlyoutItem>
-                                            <MenuFlyoutItem Text="Traduire le message" Click="OnTranslateMessageClicked">
-                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE775;" /></MenuFlyoutItem.Icon>
-                                            </MenuFlyoutItem>
-                                            <MenuFlyoutSeparator />
-                                            <MenuFlyoutItem Text="Ajouter 👍" Click="OnQuickReactThumbsUpClicked" />
-                                            <MenuFlyoutItem Text="Ajouter ❤️" Click="OnQuickReactHeartClicked" />
-                                            <MenuFlyoutItem Text="Ajouter 😂" Click="OnQuickReactJoyClicked" />
-                                            <MenuFlyoutItem Text="Ajouter 🔥" Click="OnQuickReactFireClicked" />
-                                            <MenuFlyoutSeparator />
-                                            <MenuFlyoutItem Text="Supprimer le message" Click="OnDeleteMessageClicked" Foreground="#FF453A">
-                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" Foreground="#FF453A" /></MenuFlyoutItem.Icon>
-                                            </MenuFlyoutItem>
-                                            <MenuFlyoutSeparator />
-                                            <MenuFlyoutItem Text="Copier l'identifiant" Click="OnCopyMessageIdClicked">
-                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
-                                            </MenuFlyoutItem>
-                                        </MenuFlyout>
+                                        <Flyout Placement="RightEdgeAlignedTop">
+                                            <Flyout.FlyoutPresenterStyle>
+                                                <Style TargetType="FlyoutPresenter">
+                                                    <Setter Property="Padding" Value="6" />
+                                                    <Setter Property="CornerRadius" Value="8" />
+                                                    <Setter Property="Background" Value="#111214" />
+                                                    <Setter Property="BorderBrush" Value="#2B2D31" />
+                                                    <Setter Property="BorderThickness" Value="1" />
+                                                    <Setter Property="MinWidth" Value="230" />
+                                                    <Setter Property="MaxWidth" Value="250" />
+                                                </Style>
+                                            </Flyout.FlyoutPresenterStyle>
+                                            <StackPanel Spacing="2" Tag="{x:Bind}">
+                                                <!-- 1. Rangée horizontale de réactions rapides (👏, 👍, 😂, ❤️) -->
+                                                <Border Background="#1E1F22" CornerRadius="8" Padding="4,2" Margin="2,2,2,4">
+                                                    <Grid HorizontalAlignment="Stretch">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Button Grid.Column="0" Content="👏" FontSize="16" Height="32" Width="46" Padding="0"
+                                                                Background="Transparent" BorderThickness="0" CornerRadius="6"
+                                                                HorizontalAlignment="Center" Tag="{x:Bind}" Click="OnQuickReactClapClicked" />
+                                                        <Button Grid.Column="1" Content="👍" FontSize="16" Height="32" Width="46" Padding="0"
+                                                                Background="Transparent" BorderThickness="0" CornerRadius="6"
+                                                                HorizontalAlignment="Center" Tag="{x:Bind}" Click="OnQuickReactThumbsUpClicked" />
+                                                        <Button Grid.Column="2" Content="😂" FontSize="16" Height="32" Width="46" Padding="0"
+                                                                Background="Transparent" BorderThickness="0" CornerRadius="6"
+                                                                HorizontalAlignment="Center" Tag="{x:Bind}" Click="OnQuickReactJoyClicked" />
+                                                        <Button Grid.Column="3" Content="❤️" FontSize="16" Height="32" Width="46" Padding="0"
+                                                                Background="Transparent" BorderThickness="0" CornerRadius="6"
+                                                                HorizontalAlignment="Center" Tag="{x:Bind}" Click="OnQuickReactHeartClicked" />
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- 2. Add Reaction > -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0" Tag="{x:Bind}">
+                                                    <Button.Flyout>
+                                                        <Flyout Placement="RightEdgeAlignedTop">
+                                                            <Flyout.FlyoutPresenterStyle>
+                                                                <Style TargetType="FlyoutPresenter">
+                                                                    <Setter Property="Padding" Value="8" />
+                                                                    <Setter Property="CornerRadius" Value="8" />
+                                                                    <Setter Property="Background" Value="#111214" />
+                                                                    <Setter Property="BorderBrush" Value="#2B2D31" />
+                                                                    <Setter Property="BorderThickness" Value="1" />
+                                                                </Style>
+                                                            </Flyout.FlyoutPresenterStyle>
+                                                            <StackPanel Width="180" Spacing="6" Tag="{x:Bind}">
+                                                                <TextBlock Text="Réactions" FontSize="11" FontWeight="Bold" Opacity="0.6" Margin="4,0,0,2" />
+                                                                <Grid HorizontalAlignment="Center">
+                                                                    <Grid.RowDefinitions>
+                                                                        <RowDefinition Height="Auto" />
+                                                                        <RowDefinition Height="Auto" />
+                                                                        <RowDefinition Height="Auto" />
+                                                                    </Grid.RowDefinitions>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="34" />
+                                                                        <ColumnDefinition Width="34" />
+                                                                        <ColumnDefinition Width="34" />
+                                                                        <ColumnDefinition Width="34" />
+                                                                        <ColumnDefinition Width="34" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <Button Grid.Row="0" Grid.Column="0" Content="👍" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnQuickReactThumbsUpClicked" />
+                                                                    <Button Grid.Row="0" Grid.Column="1" Content="❤️" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnQuickReactHeartClicked" />
+                                                                    <Button Grid.Row="0" Grid.Column="2" Content="😂" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnQuickReactJoyClicked" />
+                                                                    <Button Grid.Row="0" Grid.Column="3" Content="🔥" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnQuickReactFireClicked" />
+                                                                    <Button Grid.Row="0" Grid.Column="4" Content="🎉" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnAddCustomReactionClicked" />
+
+                                                                    <Button Grid.Row="1" Grid.Column="0" Content="💯" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnAddCustomReactionClicked" />
+                                                                    <Button Grid.Row="1" Grid.Column="1" Content="😭" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnAddCustomReactionClicked" />
+                                                                    <Button Grid.Row="1" Grid.Column="2" Content="🤔" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnAddCustomReactionClicked" />
+                                                                    <Button Grid.Row="1" Grid.Column="3" Content="🙏" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnAddCustomReactionClicked" />
+                                                                    <Button Grid.Row="1" Grid.Column="4" Content="👀" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnAddCustomReactionClicked" />
+
+                                                                    <Button Grid.Row="2" Grid.Column="0" Content="🚀" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnAddCustomReactionClicked" />
+                                                                    <Button Grid.Row="2" Grid.Column="1" Content="👏" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnQuickReactClapClicked" />
+                                                                    <Button Grid.Row="2" Grid.Column="2" Content="✨" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnAddCustomReactionClicked" />
+                                                                    <Button Grid.Row="2" Grid.Column="3" Content="⭐" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnAddCustomReactionClicked" />
+                                                                    <Button Grid.Row="2" Grid.Column="4" Content="💀" FontSize="16" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6" Tag="{x:Bind}" Click="OnAddCustomReactionClicked" />
+                                                                </Grid>
+                                                            </StackPanel>
+                                                        </Flyout>
+                                                    </Button.Flyout>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xED58;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Add Reaction" FontSize="13" VerticalAlignment="Center" />
+                                                        <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- Ligne de séparation -->
+                                                <Border Height="1" Background="#2B2D31" Margin="4,3" />
+
+                                                <!-- 3. Edit Message (Uniquement pour mes messages) -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Visibility="{x:Bind IsOwnMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Tag="{x:Bind}" Click="OnEditMessageClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE70F;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Edit Message" FontSize="13" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- 4. Reply -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Tag="{x:Bind}" Click="OnReplyMessageClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE97A;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Reply" FontSize="13" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- 5. Forward -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Tag="{x:Bind}" Click="OnForwardMessageClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE72D;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Forward" FontSize="13" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- Ligne de séparation -->
+                                                <Border Height="1" Background="#2B2D31" Margin="4,3" />
+
+                                                <!-- 6. Copy Text -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Tag="{x:Bind}" Click="OnCopyMessageTextClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE8C8;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Copy Text" FontSize="13" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- 7. Pin Message -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Tag="{x:Bind}" Click="OnTogglePinMessageClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE718;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Pin Message" FontSize="13" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- 8. Bookmark Message -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Tag="{x:Bind}" Click="OnBookmarkMessageClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE8A4;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Bookmark Message" FontSize="13" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- 9. Create Reminder > -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0" Tag="{x:Bind}">
+                                                    <Button.Flyout>
+                                                        <Flyout Placement="RightEdgeAlignedTop">
+                                                            <Flyout.FlyoutPresenterStyle>
+                                                                <Style TargetType="FlyoutPresenter">
+                                                                    <Setter Property="Padding" Value="6" />
+                                                                    <Setter Property="CornerRadius" Value="8" />
+                                                                    <Setter Property="Background" Value="#111214" />
+                                                                    <Setter Property="BorderBrush" Value="#2B2D31" />
+                                                                    <Setter Property="BorderThickness" Value="1" />
+                                                                    <Setter Property="MinWidth" Value="160" />
+                                                                </Style>
+                                                            </Flyout.FlyoutPresenterStyle>
+                                                            <StackPanel Spacing="2" Tag="{x:Bind}">
+                                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Tag="{x:Bind}" Content="In 20 minutes" Click="OnCreateReminder20mClicked" />
+                                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Tag="{x:Bind}" Content="In 1 hour" Click="OnCreateReminder1hClicked" />
+                                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Tag="{x:Bind}" Content="In 3 hours" Click="OnCreateReminder3hClicked" />
+                                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Tag="{x:Bind}" Content="Tomorrow" Click="OnCreateReminderTomorrowClicked" />
+                                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Tag="{x:Bind}" Content="Next week" Click="OnCreateReminderNextWeekClicked" />
+                                                            </StackPanel>
+                                                        </Flyout>
+                                                    </Button.Flyout>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE823;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Create Reminder" FontSize="13" VerticalAlignment="Center" />
+                                                        <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- 10. Apps > -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0" Tag="{x:Bind}">
+                                                    <Button.Flyout>
+                                                        <Flyout Placement="RightEdgeAlignedTop">
+                                                            <Flyout.FlyoutPresenterStyle>
+                                                                <Style TargetType="FlyoutPresenter">
+                                                                    <Setter Property="Padding" Value="8" />
+                                                                    <Setter Property="CornerRadius" Value="8" />
+                                                                    <Setter Property="Background" Value="#111214" />
+                                                                    <Setter Property="BorderBrush" Value="#2B2D31" />
+                                                                    <Setter Property="BorderThickness" Value="1" />
+                                                                </Style>
+                                                            </Flyout.FlyoutPresenterStyle>
+                                                            <StackPanel Width="170" Padding="4">
+                                                                <TextBlock Text="No Apps Available" FontSize="12" Opacity="0.6" HorizontalAlignment="Center" />
+                                                            </StackPanel>
+                                                        </Flyout>
+                                                    </Button.Flyout>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xEA86;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Apps" FontSize="13" VerticalAlignment="Center" />
+                                                        <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- 11. Mark Unread -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Tag="{x:Bind}" Click="OnMarkUnreadClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE715;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Mark Unread" FontSize="13" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- 12. Copy Message Link -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Tag="{x:Bind}" Click="OnCopyMessageLinkClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE71B;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Copy Message Link" FontSize="13" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- 13. Speak Message -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Tag="{x:Bind}" Click="OnSpeakMessageClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE767;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Speak Message" FontSize="13" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- Ligne de séparation avant Delete/Report -->
+                                                <Border Height="1" Background="#2B2D31" Margin="4,3" />
+
+                                                <!-- 14. Delete Message (Uniquement pour mes messages) -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Visibility="{x:Bind IsOwnMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Tag="{x:Bind}" Click="OnDeleteMessageClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE74D;" FontSize="14" Foreground="#F23F43" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Delete Message" FontSize="13" Foreground="#F23F43" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- 15. Report Message (Uniquement pour les messages des autres) -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Visibility="{x:Bind IsNotOwnMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Tag="{x:Bind}" Click="OnReportMessageClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE7C1;" FontSize="14" Foreground="#F23F43" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Report Message" FontSize="13" Foreground="#F23F43" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+
+                                                <!-- Ligne de séparation -->
+                                                <Border Height="1" Background="#2B2D31" Margin="4,3" />
+
+                                                <!-- 16. Copy Message ID -->
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
+                                                        Tag="{x:Bind}" Click="OnCopyMessageIdClicked">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Grid.Column="0" Glyph="&#xE943;" FontSize="14" Opacity="0.85" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="Copy Message ID" FontSize="13" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Button>
+                                            </StackPanel>
+                                        </Flyout>
                                     </StackPanel.ContextFlyout>
 
                                     <!-- En-tête de réponse (ReferencedMessage) façon Discord / SakuraCord -->
@@ -1089,7 +1416,8 @@
 
                                         <!-- Bouton avatar avec Popout Profil ultra détaillé façon Discord (couleurs custom Nitro, Tag Clan + icône, bulle statut, serveurs/amis en commun) -->
                                         <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="20" VerticalAlignment="Top"
-                                                PointerEntered="OnAvatarPointerEntered" PointerExited="OnAvatarPointerExited">
+                                                PointerEntered="OnAvatarPointerEntered" PointerExited="OnAvatarPointerExited"
+                                                DoubleTapped="OnAvatarDoubleTapped" ToolTipService.ToolTip="Cliquez pour le mini-profil, double-cliquez pour la vue complète">
                                             <Button.Flyout>
                                                 <Flyout Opening="OnUserProfileFlyoutOpening">
                                                     <Flyout.FlyoutPresenterStyle>
@@ -1121,13 +1449,19 @@
                                                                 </Border>
                                                             </Border>
 
-                                                            <!-- Avatar rond avec bordure assortie à la couleur principale du profil -->
-                                                            <Ellipse Width="86" Height="86" Margin="16,74,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                                     StrokeThickness="6" Stroke="{x:Bind Author.ProfilePrimaryColorHex, Mode=OneWay}">
-                                                                <Ellipse.Fill>
-                                                                    <ImageBrush ImageSource="{x:Bind Author.AvatarUrl, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
-                                                                </Ellipse.Fill>
-                                                            </Ellipse>
+                                                            <!-- Avatar rond avec bordure assortie à la couleur principale du profil (cliquable pour ouvrir la vue complète) -->
+                                                            <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="43"
+                                                                    Margin="16,74,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                                    ToolTipService.ToolTip="Afficher le profil complet"
+                                                                    Tag="{x:Bind Author}"
+                                                                    Click="OnOpenFullUserProfileFromPopoutClicked">
+                                                                <Ellipse Width="86" Height="86"
+                                                                         StrokeThickness="6" Stroke="{x:Bind Author.ProfilePrimaryColorHex, Mode=OneWay}">
+                                                                    <Ellipse.Fill>
+                                                                        <ImageBrush ImageSource="{x:Bind Author.AvatarUrl, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
+                                                                    </Ellipse.Fill>
+                                                                </Ellipse>
+                                                            </Button>
 
                                                             <!-- Pastille de statut sur l'avatar -->
                                                             <Ellipse Width="22" Height="22" Margin="78,136,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
@@ -1512,7 +1846,8 @@
                                         <DataTemplate x:DataType="models:DiscordUser">
                                             <Button Background="Transparent" BorderThickness="0" HorizontalAlignment="Stretch"
                                                     HorizontalContentAlignment="Left" Padding="6,5" CornerRadius="8"
-                                                    Tag="{x:Bind}" Click="OnMemberItemClicked">
+                                                    Tag="{x:Bind}" Click="OnMemberItemClicked" DoubleTapped="OnMemberItemDoubleTapped"
+                                                    ToolTipService.ToolTip="Double-cliquez pour afficher le profil complet">
                                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                                     <Grid Width="28" Height="28" PointerEntered="OnAvatarPointerEntered" PointerExited="OnAvatarPointerExited">
                                                         <Ellipse Fill="{ThemeResource ControlFillColorSecondaryBrush}" />
@@ -1643,8 +1978,355 @@
             </Grid>
         </Grid>
 
+        <!-- Vue Complète du Profil (Full User Profile Modal) 100% fidèle à Discord (media_1792268309402_4ba614ad.png) -->
+        <Grid x:Name="FullUserProfileOverlay" Visibility="Collapsed" Background="#B8000000" Canvas.ZIndex="880"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+              PointerPressed="OnFullUserProfileBackdropPointerPressed">
+            <Border Width="880" Height="620" CornerRadius="20"
+                    BorderBrush="#35373C" BorderThickness="1"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    PointerPressed="OnFullUserProfileModalContainerPointerPressed">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="{x:Bind FullProfileUser.ProfilePrimaryColorHex, Mode=OneWay}" Offset="0.0" />
+                        <GradientStop Color="{x:Bind FullProfileUser.ProfileSecondaryColorHex, Mode=OneWay}" Offset="1.0" />
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Grid>
+                    <!-- Bouton Fermer (X) en haut à droite -->
+                    <Button Width="36" Height="36" Padding="0" CornerRadius="18"
+                            Background="#40000000" BorderThickness="0"
+                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="0,16,16,0" Canvas.ZIndex="10"
+                            Click="OnCloseFullUserProfileClicked" ToolTipService.ToolTip="Fermer (Échap)">
+                        <FontIcon Glyph="&#xE8BB;" FontSize="14" Foreground="White" />
+                    </Button>
+
+                    <Grid Margin="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="330" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- COLONNE GAUCHE (Identité de l'utilisateur) -->
+                        <Border Grid.Column="0" Background="#28000000" CornerRadius="16" Padding="0" Margin="0,0,12,0">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="0">
+                                    <!-- Bannière de profil avec coins arrondis -->
+                                    <Grid Height="125">
+                                        <Border CornerRadius="16,16,0,0"
+                                                Background="{x:Bind FullProfileUser.ProfilePrimaryColorHex, Mode=OneWay}">
+                                            <Border CornerRadius="16,16,0,0"
+                                                    Visibility="{x:Bind FullProfileUser.HasBanner, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <Border.Background>
+                                                    <ImageBrush ImageSource="{x:Bind FullProfileUser.BannerUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}"
+                                                                Stretch="UniformToFill" AlignmentY="Center" AlignmentX="Center" />
+                                                </Border.Background>
+                                            </Border>
+                                        </Border>
+
+                                        <!-- Avatar rond avec bordure épaisse assortie (Cliquer pour zoomer en plein écran) -->
+                                        <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="45"
+                                                Width="90" Height="90" Margin="16,74,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                Click="OnZoomAvatarClicked" ToolTipService.ToolTip="Cliquer pour afficher la photo de profil en grand">
+                                            <Ellipse Width="90" Height="90"
+                                                     StrokeThickness="6" Stroke="{x:Bind FullProfileUser.ProfilePrimaryColorHex, Mode=OneWay}">
+                                                <Ellipse.Fill>
+                                                    <ImageBrush ImageSource="{x:Bind FullProfileUser.AvatarUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
+                                                </Ellipse.Fill>
+                                            </Ellipse>
+                                        </Button>
+
+                                        <!-- Pastille de statut sur l'avatar -->
+                                        <Ellipse Width="22" Height="22" Margin="80,138,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                 Fill="{x:Bind FullProfileUser.StatusColor, Mode=OneWay}"
+                                                 Stroke="{x:Bind FullProfileUser.ProfilePrimaryColorHex, Mode=OneWay}" StrokeThickness="4" />
+
+                                        <!-- Bulle de statut personnalisé (pensée) à droite de l'avatar -->
+                                        <Border Margin="116,110,14,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                Background="#30000000" CornerRadius="16" Padding="12,6"
+                                                Visibility="{x:Bind FullProfileUser.HasCustomStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBlock Text="{x:Bind FullProfileUser.CustomStatusText, Mode=OneWay}"
+                                                       Foreground="White" FontSize="12" FontWeight="Medium"
+                                                       TextTrimming="CharacterEllipsis" MaxWidth="180" />
+                                        </Border>
+                                    </Grid>
+
+                                    <!-- Informations sous la bannière -->
+                                    <StackPanel Margin="16,46,16,16" Spacing="10">
+                                        <!-- Nom d'affichage en très grand -->
+                                        <TextBlock Text="{x:Bind FullProfileUser.DisplayName, Mode=OneWay}"
+                                                   Foreground="{x:Bind FullProfileUser.ProfileTextForegroundColorHex, Mode=OneWay}"
+                                                   FontWeight="Bold" FontSize="22" TextTrimming="CharacterEllipsis" />
+
+                                        <!-- Username + Clan pill [✨ yuki] + Badges officiels -->
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="{x:Bind FullProfileUser.UserTag, Mode=OneWay}"
+                                                       Foreground="{x:Bind FullProfileUser.ProfileTextForegroundColorHex, Mode=OneWay}"
+                                                       Opacity="0.75" FontSize="13" VerticalAlignment="Center" />
+
+                                            <!-- Tag Clan (ex: [✨ yuki]) -->
+                                            <Border Background="#33FFFFFF" CornerRadius="8" Padding="6,2" VerticalAlignment="Center"
+                                                    Visibility="{x:Bind FullProfileUser.HasClan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <Image Width="12" Height="12" Source="{x:Bind FullProfileUser.ClanBadgeUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
+                                                    <TextBlock Text="{x:Bind FullProfileUser.ClanTag, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Badges -->
+                                            <ItemsControl ItemsSource="{x:Bind FullProfileUser.Badges, Mode=OneWay}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:DiscordBadge">
+                                                        <Image Width="16" Height="16" Source="{x:Bind IconUrl, Converter={StaticResource StringToImageSourceConverter}}"
+                                                               ToolTipService.ToolTip="{x:Bind Description}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <!-- Boutons d'action (Add Friend, Message, ...) -->
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,4">
+                                            <Button Content="Demande d'ami" Style="{StaticResource AccentButtonStyle}"
+                                                    CornerRadius="8" Padding="14,6" Height="34"
+                                                    Click="OnAddFriendFromProfileClicked" />
+                                            <Button Width="36" Height="34" Padding="0" CornerRadius="8" Background="#33FFFFFF" BorderThickness="0"
+                                                    Click="OnSendMessageFromProfileClicked" ToolTipService.ToolTip="Envoyer un message privé">
+                                                <FontIcon Glyph="&#xE8BD;" FontSize="15" Foreground="White" />
+                                            </Button>
+                                            <Button Width="36" Height="34" Padding="0" CornerRadius="8" Background="#33FFFFFF" BorderThickness="0"
+                                                    Click="OnProfileMoreActionsClicked" ToolTipService.ToolTip="Autres actions">
+                                                <FontIcon Glyph="&#xE10C;" FontSize="15" Foreground="White" />
+                                            </Button>
+                                        </StackPanel>
+
+                                        <!-- Ligne de séparation -->
+                                        <Border Height="1" Background="#25FFFFFF" Margin="0,4" />
+
+                                        <!-- Bio / About Me -->
+                                        <TextBlock Text="{x:Bind FullProfileUser.AboutMe, Mode=OneWay}"
+                                                   Foreground="{x:Bind FullProfileUser.ProfileTextForegroundColorHex, Mode=OneWay}"
+                                                   TextWrapping="Wrap" FontSize="13" Opacity="0.9" />
+
+                                        <!-- Ligne de séparation -->
+                                        <Border Height="1" Background="#25FFFFFF" Margin="0,4" />
+
+                                        <!-- Section Member Since -->
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Text="MEMBRE DEPUIS" FontSize="11" FontWeight="Bold" Opacity="0.65" Foreground="{x:Bind FullProfileUser.ProfileTextForegroundColorHex, Mode=OneWay}" />
+                                            <TextBlock Text="{x:Bind FullProfileUser.MemberSinceText, Mode=OneWay}" FontSize="13" FontWeight="Medium" Foreground="{x:Bind FullProfileUser.ProfileTextForegroundColorHex, Mode=OneWay}" />
+                                        </StackPanel>
+
+                                        <!-- Ligne de séparation -->
+                                        <Border Height="1" Background="#25FFFFFF" Margin="0,4" />
+
+                                        <!-- Section Note -->
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Text="NOTE (VISIBLE UNIQUEMENT PAR VOUS)" FontSize="11" FontWeight="Bold" Opacity="0.65" Foreground="{x:Bind FullProfileUser.ProfileTextForegroundColorHex, Mode=OneWay}" />
+                                            <TextBox x:Name="ProfileUserNoteTextBox" PlaceholderText="Cliquez pour ajouter une note"
+                                                     Background="Transparent" BorderThickness="0" Padding="0" FontSize="12"
+                                                     Foreground="{x:Bind FullProfileUser.ProfileTextForegroundColorHex, Mode=OneWay}"
+                                                     LostFocus="OnProfileUserNoteLostFocus" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+
+                        <!-- COLONNE DROITE (Onglets : Board, Activity, Wishlist, Mutuals) -->
+                        <Grid Grid.Column="1" Margin="8,0,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <!-- Barre d'onglets façon Discord -->
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="16" Margin="4,0,0,12">
+                                <!-- Onglet Board -->
+                                <StackPanel Spacing="4">
+                                    <Button Content="Board" Background="Transparent" BorderThickness="0" Padding="4,4"
+                                            FontSize="14" FontWeight="SemiBold" Foreground="White"
+                                            Tag="Board" Click="OnProfileTabClicked" />
+                                    <Border x:Name="ProfileBoardTabIndicator" Height="2" Background="White" CornerRadius="1" />
+                                </StackPanel>
+
+                                <!-- Onglet Activity -->
+                                <StackPanel Spacing="4">
+                                    <Button Content="Activity" Background="Transparent" BorderThickness="0" Padding="4,4"
+                                            FontSize="14" FontWeight="SemiBold" Foreground="White" Opacity="0.75"
+                                            Tag="Activity" Click="OnProfileTabClicked" />
+                                    <Border x:Name="ProfileActivityTabIndicator" Height="2" Background="White" CornerRadius="1" Visibility="Collapsed" />
+                                </StackPanel>
+
+                                <!-- Onglet Wishlist -->
+                                <StackPanel Spacing="4">
+                                    <Button Content="Wishlist" Background="Transparent" BorderThickness="0" Padding="4,4"
+                                            FontSize="14" FontWeight="SemiBold" Foreground="White" Opacity="0.75"
+                                            Tag="Wishlist" Click="OnProfileTabClicked" />
+                                    <Border x:Name="ProfileWishlistTabIndicator" Height="2" Background="White" CornerRadius="1" Visibility="Collapsed" />
+                                </StackPanel>
+
+                                <!-- Onglet Amis en commun -->
+                                <StackPanel Spacing="4" Visibility="{x:Bind FullProfileUser.HasMutualInfo, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Button Content="{x:Bind FullProfileUser.MutualSummaryText, Mode=OneWay}" Background="Transparent" BorderThickness="0" Padding="4,4"
+                                            FontSize="14" FontWeight="SemiBold" Foreground="White" Opacity="0.75"
+                                            Tag="Mutuals" Click="OnProfileTabClicked" />
+                                    <Border x:Name="ProfileMutualsTabIndicator" Height="2" Background="White" CornerRadius="1" Visibility="Collapsed" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- CONTENU DES ONGLETS -->
+                            <Grid Grid.Row="1">
+                                <!-- CONTENU ONGLET 1 : BOARD (Games I Like - 2x4 Grid) -->
+                                <ScrollViewer x:Name="ProfileBoardContent" VerticalScrollBarVisibility="Auto">
+                                    <Border Background="#25000000" CornerRadius="16" Padding="16" Margin="0,0,4,0">
+                                        <StackPanel Spacing="12">
+                                            <Grid>
+                                                <TextBlock Text="Games I Like" FontSize="15" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+                                                <Button Width="28" Height="28" Padding="0" Background="Transparent" BorderThickness="0"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                    <FontIcon Glyph="&#xE10C;" FontSize="13" Foreground="White" Opacity="0.75" />
+                                                </Button>
+                                            </Grid>
+
+                                            <!-- Grille 2x4 des 8 affiches de jeux (Valorant, osu!, Silent Hill f, Overwatch, Life is Strange, Apex Legends, Saya no Uta, Roblox) -->
+                                            <Grid HorizontalAlignment="Center">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Ligne 1 -->
+                                                <Border Grid.Row="0" Grid.Column="0" Width="105" Height="142" CornerRadius="10" Margin="5"
+                                                        Background="#20000000" ToolTipService.ToolTip="VALORANT">
+                                                    <Image Source="ms-appx:///Assets/Games/valorant.png" Stretch="UniformToFill" />
+                                                </Border>
+                                                <Border Grid.Row="0" Grid.Column="1" Width="105" Height="142" CornerRadius="10" Margin="5"
+                                                        Background="#20000000" ToolTipService.ToolTip="osu!">
+                                                    <Image Source="ms-appx:///Assets/Games/osu.png" Stretch="UniformToFill" />
+                                                </Border>
+                                                <Border Grid.Row="0" Grid.Column="2" Width="105" Height="142" CornerRadius="10" Margin="5"
+                                                        Background="#20000000" ToolTipService.ToolTip="SILENT HILL f">
+                                                    <Image Source="ms-appx:///Assets/Games/silenthill.png" Stretch="UniformToFill" />
+                                                </Border>
+                                                <Border Grid.Row="0" Grid.Column="3" Width="105" Height="142" CornerRadius="10" Margin="5"
+                                                        Background="#20000000" ToolTipService.ToolTip="OVERWATCH">
+                                                    <Image Source="ms-appx:///Assets/Games/overwatch.png" Stretch="UniformToFill" />
+                                                </Border>
+
+                                                <!-- Ligne 2 -->
+                                                <Border Grid.Row="1" Grid.Column="0" Width="105" Height="142" CornerRadius="10" Margin="5"
+                                                        Background="#20000000" ToolTipService.ToolTip="LIFE IS STRANGE">
+                                                    <Image Source="ms-appx:///Assets/Games/lifeisstrange.png" Stretch="UniformToFill" />
+                                                </Border>
+                                                <Border Grid.Row="1" Grid.Column="1" Width="105" Height="142" CornerRadius="10" Margin="5"
+                                                        Background="#20000000" ToolTipService.ToolTip="APEX LEGENDS">
+                                                    <Image Source="ms-appx:///Assets/Games/apex.png" Stretch="UniformToFill" />
+                                                </Border>
+                                                <Border Grid.Row="1" Grid.Column="2" Width="105" Height="142" CornerRadius="10" Margin="5"
+                                                        Background="#20000000" ToolTipService.ToolTip="THE SONG OF SAYA">
+                                                    <Image Source="ms-appx:///Assets/Games/saya.png" Stretch="UniformToFill" />
+                                                </Border>
+                                                <Border Grid.Row="1" Grid.Column="3" Width="105" Height="142" CornerRadius="10" Margin="5"
+                                                        Background="#20000000" ToolTipService.ToolTip="ROBLOX">
+                                                    <Image Source="ms-appx:///Assets/Games/roblox.png" Stretch="UniformToFill" />
+                                                </Border>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </ScrollViewer>
+
+                                <!-- CONTENU ONGLET 2 : ACTIVITY (Spotify / Rich Presence) -->
+                                <ScrollViewer x:Name="ProfileActivityContent" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                                    <Border Background="#25000000" CornerRadius="16" Padding="16">
+                                        <StackPanel Spacing="12">
+                                            <TextBlock Text="Activité actuelle" FontSize="15" FontWeight="Bold" Foreground="White" />
+                                            <Border Background="#30000000" CornerRadius="12" Padding="16"
+                                                    Visibility="{x:Bind FullProfileUser.HasRichPresence, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid Grid.Column="0" Width="68" Height="68" Margin="0,0,14,0">
+                                                        <Border CornerRadius="10">
+                                                            <Border.Background>
+                                                                <ImageBrush ImageSource="{x:Bind FullProfileUser.PrimaryActivity.LargeImageUrl, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
+                                                            </Border.Background>
+                                                        </Border>
+                                                    </Grid>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                                                        <TextBlock Text="{x:Bind FullProfileUser.PrimaryActivity.HeaderLabel, Mode=OneWay}" FontSize="12" FontWeight="Bold" Opacity="0.75" Foreground="White" />
+                                                        <TextBlock Text="{x:Bind FullProfileUser.PrimaryActivity.Name, Mode=OneWay}" FontSize="15" FontWeight="Bold" Foreground="White" />
+                                                        <TextBlock Text="{x:Bind FullProfileUser.PrimaryActivity.Details, Mode=OneWay}" FontSize="13" Opacity="0.85" Foreground="White" />
+                                                        <TextBlock Text="{x:Bind FullProfileUser.PrimaryActivity.State, Mode=OneWay}" FontSize="12" Opacity="0.7" Foreground="White" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                </ScrollViewer>
+
+                                <!-- CONTENU ONGLET 3 : WISHLIST -->
+                                <ScrollViewer x:Name="ProfileWishlistContent" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                                    <Border Background="#25000000" CornerRadius="16" Padding="20">
+                                        <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE734;" FontSize="28" Foreground="White" Opacity="0.5" HorizontalAlignment="Center" />
+                                            <TextBlock Text="Aucun jeu dans la liste de souhaits pour le moment" FontSize="14" Opacity="0.65" Foreground="White" HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </ScrollViewer>
+
+                                <!-- CONTENU ONGLET 4 : MUTUALS -->
+                                <ScrollViewer x:Name="ProfileMutualsContent" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                                    <Border Background="#25000000" CornerRadius="16" Padding="16">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="Serveurs et amis en commun" FontSize="15" FontWeight="Bold" Foreground="White" />
+                                            <TextBlock Text="{x:Bind FullProfileUser.MutualSummaryText, Mode=OneWay}" FontSize="13" Opacity="0.8" Foreground="White" />
+                                        </StackPanel>
+                                    </Border>
+                                </ScrollViewer>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
         <!-- Éditeur de Profil Plein Écran 100% fidèle à Discord (Main Profile / Server Profiles + Cosmétiques Nitro grisés si non-Nitro, sans aucun popup Nitro) -->
         <Grid x:Name="ProfileEditorOverlay" Visibility="Collapsed" Background="#F2111214" Canvas.ZIndex="900"
               HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+        <!-- Overlay Zoom Plein Écran de l'Avatar (100% identique à media_1792268343564_b3db1471.png) -->
+        <Grid x:Name="AvatarZoomOverlay" Visibility="Collapsed" Background="#E6000000" Canvas.ZIndex="999"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+              PointerPressed="OnAvatarZoomBackdropPointerPressed">
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                <!-- Image de profil agrandie avec coins légèrement arrondis comme dans Discord -->
+                <Border CornerRadius="8" Background="#111214"
+                        PointerPressed="OnAvatarZoomImagePointerPressed">
+                    <Image x:Name="AvatarZoomImage" Stretch="Uniform"
+                           MaxWidth="600" MaxHeight="600" />
+                </Border>
+
+                <!-- Bouton fermer (X) stylé en haut à droite -->
+                <Button Width="36" Height="36" Padding="0" CornerRadius="18"
+                        Background="#60000000" BorderThickness="0"
+                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="0,-44,-8,0"
+                        Click="OnCloseAvatarZoomClicked" ToolTipService.ToolTip="Fermer (Échap)">
+                    <FontIcon Glyph="&#xE8BB;" FontSize="14" Foreground="White" />
+                </Button>
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>

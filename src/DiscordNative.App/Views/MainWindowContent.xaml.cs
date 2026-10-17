@@ -8,7 +8,11 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Media.Core;
+using Windows.Media.Playback;
+using Windows.Media.SpeechSynthesis;
 using Windows.System;
+using Microsoft.UI.Xaml.Controls.Primitives;
 
 namespace DiscordNative.App.Views;
 
@@ -21,6 +25,15 @@ public sealed partial class MainWindowContent : UserControl
     {
         get => (MainViewModel)GetValue(ViewModelProperty);
         set => SetValue(ViewModelProperty, value);
+    }
+
+    public static readonly DependencyProperty FullProfileUserProperty =
+        DependencyProperty.Register(nameof(FullProfileUser), typeof(DiscordUser), typeof(MainWindowContent), new PropertyMetadata(null));
+
+    public DiscordUser? FullProfileUser
+    {
+        get => (DiscordUser?)GetValue(FullProfileUserProperty);
+        set => SetValue(FullProfileUserProperty, value);
     }
 
     public FrameworkElement TitleBarElement => AppTitleBar;
@@ -91,6 +104,24 @@ public sealed partial class MainWindowContent : UserControl
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        KeyDown += (s, e) =>
+        {
+            if (e.Key == VirtualKey.Escape)
+            {
+                if (AvatarZoomOverlay.Visibility == Visibility.Visible)
+                {
+                    HideAvatarZoom();
+                    e.Handled = true;
+                    return;
+                }
+                if (FullUserProfileOverlay.Visibility == Visibility.Visible)
+                {
+                    HideFullUserProfileModal();
+                    e.Handled = true;
+                    return;
+                }
+            }
+        };
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -920,14 +951,54 @@ public sealed partial class MainWindowContent : UserControl
     }
 
     // --- Menus contextuels Clic Droit : Messages ---
+    private static void CloseParentFlyout(object sender)
+    {
+        if (sender is DependencyObject dobj)
+        {
+            DependencyObject? curr = dobj;
+            while (curr != null)
+            {
+                if (curr is FlyoutPresenter fp)
+                {
+                    if (VisualTreeHelper.GetParent(fp) is Popup popup)
+                    {
+                        popup.IsOpen = false;
+                        return;
+                    }
+                    if (fp.Parent is Popup p2)
+                    {
+                        p2.IsOpen = false;
+                        return;
+                    }
+                }
+                curr = VisualTreeHelper.GetParent(curr);
+            }
+        }
+    }
+
     private static DiscordMessage? GetMessageFromSender(object sender)
     {
-        if (sender is FrameworkElement fe && fe.DataContext is DiscordMessage msg) return msg;
+        if (sender is FrameworkElement fe)
+        {
+            if (fe.DataContext is DiscordMessage msg) return msg;
+            if (fe.Tag is DiscordMessage tagMsg) return tagMsg;
+            DependencyObject? curr = fe;
+            while (curr != null)
+            {
+                if (curr is FrameworkElement parentFe)
+                {
+                    if (parentFe.DataContext is DiscordMessage parentMsg) return parentMsg;
+                    if (parentFe.Tag is DiscordMessage parentTagMsg) return parentTagMsg;
+                }
+                curr = VisualTreeHelper.GetParent(curr);
+            }
+        }
         return null;
     }
 
     private void OnReplyMessageClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg != null)
         {
@@ -938,6 +1009,7 @@ public sealed partial class MainWindowContent : UserControl
 
     private void OnEditMessageClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg != null)
         {
@@ -948,14 +1020,28 @@ public sealed partial class MainWindowContent : UserControl
         }
     }
 
+    private void OnForwardMessageClicked(object sender, RoutedEventArgs e)
+    {
+        CloseParentFlyout(sender);
+        var msg = GetMessageFromSender(sender);
+        if (msg != null && !string.IsNullOrWhiteSpace(msg.Content))
+        {
+            MessageInput.Text = msg.Content;
+            MessageInput.SelectionStart = MessageInput.Text.Length;
+            MessageInput.Focus(FocusState.Programmatic);
+        }
+    }
+
     private void OnTogglePinMessageClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg != null) _ = ViewModel.TogglePinMessageAsync(msg);
     }
 
     private async void OnTranslateMessageClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg is null || string.IsNullOrWhiteSpace(msg.Content)) return;
 
@@ -992,6 +1078,7 @@ public sealed partial class MainWindowContent : UserControl
 
     private void OnCopyMessageTextClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg != null && !string.IsNullOrEmpty(msg.Content))
         {
@@ -999,40 +1086,289 @@ public sealed partial class MainWindowContent : UserControl
         }
     }
 
+    private void OnBookmarkMessageClicked(object sender, RoutedEventArgs e)
+    {
+        CloseParentFlyout(sender);
+        var msg = GetMessageFromSender(sender);
+        if (msg != null)
+        {
+            var guildPart = string.IsNullOrWhiteSpace(msg.GuildId) ? "@me" : msg.GuildId;
+            var link = $"https://discord.com/channels/{guildPart}/{msg.ChannelId}/{msg.Id}";
+            CopyToClipboard(link);
+        }
+    }
+
+    private void OnCopyMessageLinkClicked(object sender, RoutedEventArgs e)
+    {
+        CloseParentFlyout(sender);
+        var msg = GetMessageFromSender(sender);
+        if (msg != null)
+        {
+            var guildPart = string.IsNullOrWhiteSpace(msg.GuildId) ? "@me" : msg.GuildId;
+            var link = $"https://discord.com/channels/{guildPart}/{msg.ChannelId}/{msg.Id}";
+            CopyToClipboard(link);
+        }
+    }
+
+    private void OnMarkUnreadClicked(object sender, RoutedEventArgs e)
+    {
+        CloseParentFlyout(sender);
+    }
+
+    private static SpeechSynthesizer? _speechSynthesizer;
+    private static MediaPlayer? _ttsPlayer;
+
+    private async void OnSpeakMessageClicked(object sender, RoutedEventArgs e)
+    {
+        CloseParentFlyout(sender);
+        var msg = GetMessageFromSender(sender);
+        if (msg == null || string.IsNullOrWhiteSpace(msg.Content)) return;
+        try
+        {
+            _speechSynthesizer ??= new SpeechSynthesizer();
+            _ttsPlayer ??= new MediaPlayer();
+            var stream = await _speechSynthesizer.SynthesizeTextToStreamAsync(msg.Content);
+            _ttsPlayer.Source = MediaSource.CreateFromStream(stream, stream.ContentType);
+            _ttsPlayer.Play();
+        }
+        catch { }
+    }
+
+    private void OnQuickReactClapClicked(object sender, RoutedEventArgs e)
+    {
+        CloseParentFlyout(sender);
+        var msg = GetMessageFromSender(sender);
+        if (msg != null) _ = ViewModel.AddReactionAsync(msg.Id, "👏");
+    }
+
     private void OnQuickReactThumbsUpClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg != null) _ = ViewModel.AddReactionAsync(msg.Id, "👍");
     }
 
     private void OnQuickReactHeartClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg != null) _ = ViewModel.AddReactionAsync(msg.Id, "❤️");
     }
 
     private void OnQuickReactJoyClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg != null) _ = ViewModel.AddReactionAsync(msg.Id, "😂");
     }
 
     private void OnQuickReactFireClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg != null) _ = ViewModel.AddReactionAsync(msg.Id, "🔥");
     }
 
+    private void OnAddCustomReactionClicked(object sender, RoutedEventArgs e)
+    {
+        CloseParentFlyout(sender);
+        var msg = GetMessageFromSender(sender);
+        if (msg == null) return;
+        string emoji = (sender as Button)?.Content?.ToString() ?? (sender as FrameworkElement)?.Tag?.ToString() ?? "👍";
+        _ = ViewModel.AddReactionAsync(msg.Id, emoji);
+    }
+
+    private void OnCreateReminder20mClicked(object sender, RoutedEventArgs e) => CloseParentFlyout(sender);
+    private void OnCreateReminder1hClicked(object sender, RoutedEventArgs e) => CloseParentFlyout(sender);
+    private void OnCreateReminder3hClicked(object sender, RoutedEventArgs e) => CloseParentFlyout(sender);
+    private void OnCreateReminderTomorrowClicked(object sender, RoutedEventArgs e) => CloseParentFlyout(sender);
+    private void OnCreateReminderNextWeekClicked(object sender, RoutedEventArgs e) => CloseParentFlyout(sender);
+
     private void OnDeleteMessageClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg != null) _ = ViewModel.DeleteMessageAsync(msg.Id);
     }
 
+    private void OnReportMessageClicked(object sender, RoutedEventArgs e)
+    {
+        CloseParentFlyout(sender);
+    }
+
     private void OnCopyMessageIdClicked(object sender, RoutedEventArgs e)
     {
+        CloseParentFlyout(sender);
         var msg = GetMessageFromSender(sender);
         if (msg != null) CopyToClipboard(msg.Id);
+    }
+
+    // --- Vue Complète du Profil (Full User Profile Modal) ---
+    public void ShowFullUserProfileModal(DiscordUser? user)
+    {
+        if (user == null) return;
+        FullProfileUser = user;
+
+        if (!user.HasProfileEnriched && ViewModel?.Client?.Rest != null)
+        {
+            _ = ViewModel.Client.Rest.EnrichUserProfileAsync(user);
+        }
+
+        if (ProfileUserNoteTextBox != null)
+        {
+            ProfileUserNoteTextBox.Text = App.Settings.Current.UserNotes.TryGetValue(user.Id, out var note) ? note : string.Empty;
+        }
+
+        SelectProfileTab("Board");
+        FullUserProfileOverlay.Visibility = Visibility.Visible;
+    }
+
+    public void HideFullUserProfileModal()
+    {
+        FullUserProfileOverlay.Visibility = Visibility.Collapsed;
+        FullProfileUser = null;
+    }
+
+    private void OnCloseFullUserProfileClicked(object sender, RoutedEventArgs e) => HideFullUserProfileModal();
+    private void OnFullUserProfileBackdropPointerPressed(object sender, PointerRoutedEventArgs e) => HideFullUserProfileModal();
+    private void OnFullUserProfileModalContainerPointerPressed(object sender, PointerRoutedEventArgs e) => e.Handled = true;
+
+    public void ShowAvatarZoom(string? avatarUrl)
+    {
+        if (string.IsNullOrWhiteSpace(avatarUrl)) return;
+        try
+        {
+            AvatarZoomImage.Source = new BitmapImage(new Uri(avatarUrl));
+            AvatarZoomOverlay.Visibility = Visibility.Visible;
+        }
+        catch { }
+    }
+
+    public void HideAvatarZoom()
+    {
+        AvatarZoomOverlay.Visibility = Visibility.Collapsed;
+        AvatarZoomImage.Source = null;
+    }
+
+    private void OnZoomAvatarClicked(object sender, RoutedEventArgs e)
+    {
+        if (FullProfileUser != null && !string.IsNullOrWhiteSpace(FullProfileUser.AvatarUrl))
+        {
+            ShowAvatarZoom(FullProfileUser.AvatarUrl);
+        }
+    }
+
+    private void OnCloseAvatarZoomClicked(object sender, RoutedEventArgs e) => HideAvatarZoom();
+    private void OnAvatarZoomBackdropPointerPressed(object sender, PointerRoutedEventArgs e) => HideAvatarZoom();
+    private void OnAvatarZoomImagePointerPressed(object sender, PointerRoutedEventArgs e) => e.Handled = true;
+
+    private void OnOpenFullUserProfileFromPopoutClicked(object sender, RoutedEventArgs e)
+    {
+        CloseParentFlyout(sender);
+        DiscordUser? user = null;
+        if (sender is FrameworkElement fe)
+        {
+            user = fe.Tag as DiscordUser ?? fe.DataContext as DiscordUser;
+        }
+        if (user != null)
+        {
+            ShowFullUserProfileModal(user);
+        }
+    }
+
+    private void OnAvatarDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        CloseParentFlyout(sender);
+        if (sender is FrameworkElement fe)
+        {
+            var user = (fe.DataContext as DiscordMessage)?.Author ?? fe.Tag as DiscordUser ?? fe.DataContext as DiscordUser;
+            if (user != null)
+            {
+                ShowFullUserProfileModal(user);
+            }
+        }
+    }
+
+    private void OnMemberItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is FrameworkElement fe && fe.Tag is DiscordUser user)
+        {
+            ShowFullUserProfileModal(user);
+        }
+    }
+
+    private void OnCurrentUserAvatarDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (ViewModel?.CurrentUser != null)
+        {
+            ShowFullUserProfileModal(ViewModel.CurrentUser);
+        }
+    }
+
+    private void OnProfileTabClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is string tabName)
+        {
+            SelectProfileTab(tabName);
+        }
+    }
+
+    private void SelectProfileTab(string tabName)
+    {
+        if (ProfileBoardContent == null) return;
+
+        ProfileBoardContent.Visibility = tabName == "Board" ? Visibility.Visible : Visibility.Collapsed;
+        ProfileActivityContent.Visibility = tabName == "Activity" ? Visibility.Visible : Visibility.Collapsed;
+        ProfileWishlistContent.Visibility = tabName == "Wishlist" ? Visibility.Visible : Visibility.Collapsed;
+        ProfileMutualsContent.Visibility = tabName == "Mutuals" ? Visibility.Visible : Visibility.Collapsed;
+
+        ProfileBoardTabIndicator.Visibility = tabName == "Board" ? Visibility.Visible : Visibility.Collapsed;
+        ProfileActivityTabIndicator.Visibility = tabName == "Activity" ? Visibility.Visible : Visibility.Collapsed;
+        ProfileWishlistTabIndicator.Visibility = tabName == "Wishlist" ? Visibility.Visible : Visibility.Collapsed;
+        ProfileMutualsTabIndicator.Visibility = tabName == "Mutuals" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void OnAddFriendFromProfileClicked(object sender, RoutedEventArgs e)
+    {
+        if (FullProfileUser != null && ViewModel != null)
+        {
+            try
+            {
+                var targetTag = FullProfileUser.Discriminator is null or "0" ? FullProfileUser.Username : $"{FullProfileUser.Username}#{FullProfileUser.Discriminator}";
+                await ViewModel.SendFriendRequestAsync(targetTag);
+            }
+            catch { }
+        }
+    }
+
+    private async void OnSendMessageFromProfileClicked(object sender, RoutedEventArgs e)
+    {
+        if (FullProfileUser != null && ViewModel != null)
+        {
+            var target = FullProfileUser;
+            HideFullUserProfileModal();
+            await ViewModel.OpenOrSendDirectMessageAsync(target);
+        }
+    }
+
+    private void OnProfileMoreActionsClicked(object sender, RoutedEventArgs e)
+    {
+        if (FullProfileUser != null)
+        {
+            CopyToClipboard(FullProfileUser.UserTag);
+        }
+    }
+
+    private void OnProfileUserNoteLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (FullProfileUser != null && sender is TextBox tb)
+        {
+            App.Settings.Current.UserNotes[FullProfileUser.Id] = tb.Text;
+            App.Settings.Save();
+        }
     }
 
     // --- Menus contextuels Clic Droit : Serveurs ---

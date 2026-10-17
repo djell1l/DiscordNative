@@ -63,6 +63,8 @@ public sealed class DiscordMessage
     /// <summary>Faux = message "suite" du même auteur (en-tête masqué, comme Discord).</summary>
     [JsonIgnore] public bool ShowHeader { get; set; } = true;
     [JsonIgnore] public bool HideHeader => !ShowHeader;
+    [JsonIgnore] public bool IsOwnMessage { get; set; }
+    [JsonIgnore] public bool IsNotOwnMessage => !IsOwnMessage;
 
     /// <summary>Types 0 (défaut), 19 (réponse), 20 (commande slash), 23 (menu contextuel) = messages normaux.</summary>
     public bool IsSystem => Type is not (0 or 19 or 20 or 23);
