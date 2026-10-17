@@ -1145,9 +1145,6 @@
                                                     </Grid>
                                                 </Button>
 
-                                                <!-- Ligne de séparation -->
-                                                <Border Height="1" Background="#2B2D31" Margin="4,3" />
-
                                                 <!-- 3. Edit Message (Uniquement pour mes messages) -->
                                                 <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                                         Background="Transparent" BorderThickness="0" Padding="8,6" CornerRadius="4" Height="34" Margin="2,0"
