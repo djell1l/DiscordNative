@@ -222,4 +222,10 @@ public sealed class DiscordRole
 
     [JsonIgnore]
     public ulong PermissionBits => ulong.TryParse(Permissions, out var p) ? p : 0UL;
+
+    [JsonIgnore]
+    public string ColorHex => Color != 0 ? $"#{Color:X6}" : "#99AAB5";
+
+    [JsonIgnore]
+    public bool HasColor => Color != 0;
 }

@@ -471,7 +471,7 @@ public sealed partial class MainWindow : Window
             using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\Diswin");
             if (key == null) return;
             key.SetValue("DisplayName", "Diswin");
-            key.SetValue("DisplayVersion", "0.4.9");
+            key.SetValue("DisplayVersion", "0.5.0");
             key.SetValue("Publisher", "Diswin");
             key.SetValue("InstallLocation", targetDir);
             key.SetValue("DisplayIcon", File.Exists(iconPath) ? iconPath : mainExe);

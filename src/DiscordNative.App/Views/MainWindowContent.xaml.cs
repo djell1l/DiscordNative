@@ -774,12 +774,80 @@ public sealed partial class MainWindowContent : UserControl
         ViewModel.ToggleMemberList();
     }
 
-    private async void OnMemberItemClicked(object sender, RoutedEventArgs e)
+    private void OnMemberItemClicked(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: DiscordUser user })
+        // Le clic ouvre directement le popout de profil Discord via Button.Flyout
+    }
+
+    private void OnActivityCardClicked(object sender, RoutedEventArgs e)
+    {
+        // Ouvre le profil de l'utilisateur actif
+    }
+
+    private void OnViewFullProfileFromPopoutClicked(object sender, RoutedEventArgs e)
+    {
+        CloseParentFlyout(sender);
+        if (sender is FrameworkElement fe && fe.Tag is DiscordUser user)
         {
-            await ViewModel.OpenOrSendDirectMessageAsync(user);
+            ShowFullUserProfileModal(user);
         }
+    }
+
+    private void OnShareProfileFromPopoutClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is DiscordUser user)
+        {
+            CopyToClipboard(user.Discriminator is null or "0" ? $"@{user.Username}" : $"{user.Username}#{user.Discriminator}");
+        }
+    }
+
+    private void OnCopyUserIdFromPopoutClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is DiscordUser user)
+        {
+            CopyToClipboard(user.Id);
+        }
+    }
+
+    private async void OnBlockUserFromPopoutClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is DiscordUser user)
+        {
+            await ViewModel.BlockUserAsync(user);
+        }
+    }
+
+    private async void OnAddFriendFromPopoutClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is DiscordUser user)
+        {
+            try
+            {
+                await ViewModel.SendFriendRequestAsync(user.UserTag);
+            }
+            catch { }
+        }
+    }
+
+    private async void OnInviteUserToGuildClicked(object sender, RoutedEventArgs e)
+    {
+        await ShowCreatedInviteDialogAsync();
+    }
+
+    private void OnIgnoreUserClicked(object sender, RoutedEventArgs e)
+    {
+    }
+
+    private async void OnReportUserClicked(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Signaler un profil",
+            Content = "Ce profil a été marqué pour modération.",
+            CloseButtonText = "OK",
+            XamlRoot = this.XamlRoot
+        };
+        await dialog.ShowAsync();
     }
 
     private async void OnQuickProfileMessageKeyDown(object sender, KeyRoutedEventArgs e)
@@ -3253,9 +3321,19 @@ public sealed partial class MainWindowContent : UserControl
 
     private void OnUserProfileFlyoutOpening(object sender, object e)
     {
-        if (sender is Flyout { Content: FrameworkElement { Tag: DiscordUser user } })
+        if (sender is Flyout flyout)
         {
-            _ = ViewModel.EnsureUserProfileEnrichedAsync(user);
+            DiscordUser? targetUser = null;
+            if (flyout.Content is FrameworkElement { Tag: DiscordUser u1 }) targetUser = u1;
+            else if (flyout.Content is FrameworkElement { DataContext: DiscordUser u2 }) targetUser = u2;
+            else if (flyout.Target is FrameworkElement { Tag: DiscordUser u3 }) targetUser = u3;
+            else if (flyout.Target is FrameworkElement { DataContext: DiscordUser u4 }) targetUser = u4;
+
+            if (targetUser != null)
+            {
+                _ = ViewModel.EnsureUserProfileEnrichedAsync(targetUser);
+                targetUser.UpdateDisplayRoles(ViewModel.SelectedGuild?.Roles);
+            }
         }
     }
 

@@ -99,6 +99,7 @@ public sealed class DiscordClient : IAsyncDisposable
     public event Action<string>? VoiceParticipantsChanged; // channelId
     public event Action<string, bool>? VoiceSpeakingChanged; // userId, isSpeaking
     public event Action<string>? PresenceUpdated; // userId
+    public event Action<string>? GuildMembersUpdated; // guildId
     public event Action<GatewayConnectionState>? ConnectionStateChanged;
 
     public DiscordClient(string token, ILoggerFactory? loggerFactory = null)
@@ -291,7 +292,14 @@ public sealed class DiscordClient : IAsyncDisposable
                     {
                         CacheGuildMember(chunkGid, mEl);
                     }
+                    if (!string.IsNullOrEmpty(chunkGid))
+                    {
+                        GuildMembersUpdated?.Invoke(chunkGid);
+                    }
                 }
+                break;
+            case "GUILD_MEMBER_LIST_UPDATE":
+                HandleGuildMemberListUpdate(evt.Data);
                 break;
             case "GUILD_DELETE":
                 if (evt.Data.TryGetProperty("id", out var delIdProp))
@@ -382,13 +390,71 @@ public sealed class DiscordClient : IAsyncDisposable
         catch { }
     }
 
-    public Task SubscribeGuildAsync(string guildId, CancellationToken ct = default)
+    public Task SubscribeGuildAsync(string guildId, string? channelId = null, CancellationToken ct = default)
     {
         if (_gateway is not null && !string.IsNullOrEmpty(guildId))
         {
-            return _gateway.SendGuildSubscriptionsAsync(guildId, ct);
+            return _gateway.SendGuildSubscriptionsAsync(guildId, channelId, ct);
         }
         return Task.CompletedTask;
+    }
+
+    public IReadOnlyCollection<DiscordUser> GetCachedGuildMembers(string guildId)
+    {
+        if (!string.IsNullOrEmpty(guildId) && _guildMembers.TryGetValue(guildId, out var dict))
+        {
+            return dict.Values.ToList();
+        }
+        return Array.Empty<DiscordUser>();
+    }
+
+    public (string? channelId, string? channelName) GetUserVoiceChannel(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return (null, null);
+        foreach (var (chId, members) in _voiceChannelMembers)
+        {
+            if (members.ContainsKey(userId))
+            {
+                var ch = Guilds.SelectMany(g => g.Channels).FirstOrDefault(c => c.Id == chId)
+                         ?? PrivateChannels.FirstOrDefault(c => c.Id == chId);
+                return (chId, ch?.DisplayName ?? "Vocal");
+            }
+        }
+        return (null, null);
+    }
+
+    private void HandleGuildMemberListUpdate(JsonElement data)
+    {
+        try
+        {
+            var guildId = data.TryGetProperty("guild_id", out var gidEl) ? gidEl.GetString() : null;
+            if (string.IsNullOrEmpty(guildId)) return;
+
+            if (data.TryGetProperty("ops", out var opsArr) && opsArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var opEl in opsArr.EnumerateArray())
+                {
+                    if (opEl.TryGetProperty("items", out var itemsArr) && itemsArr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in itemsArr.EnumerateArray())
+                        {
+                            if (item.TryGetProperty("member", out var memEl) && memEl.ValueKind == JsonValueKind.Object)
+                            {
+                                CacheGuildMember(guildId, memEl);
+
+                                if (memEl.TryGetProperty("presence", out var presEl) && presEl.ValueKind == JsonValueKind.Object)
+                                {
+                                    HandlePresenceUpdate(presEl);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            GuildMembersUpdated?.Invoke(guildId);
+        }
+        catch { }
     }
 
     public List<string> GetCurrentUserGuildRoles(string guildId)

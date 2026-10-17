@@ -13,6 +13,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly DiscordClient _client;
     public DiscordClient Client => _client;
     private DiscordGuild? _selectedGuild;
+    public DiscordGuild? SelectedGuild => _selectedGuild;
     private DiscordChannel? _selectedChannel;
     private bool _showingFriends;
     private string _friendsFilter = "All";
@@ -26,6 +27,13 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<DiscordMessage> PinnedMessages { get; } = new();
     public ObservableCollection<DiscordMessage> RecentMentions { get; } = new();
     public ObservableCollection<DiscordUser> ChannelMembers { get; } = new();
+    public ObservableCollection<MemberActivityCardViewModel> RecentMemberActivities { get; } = new();
+    public bool HasRecentMemberActivities => RecentMemberActivities.Count > 0;
+    public ObservableCollection<DiscordUser> OnlineMembers { get; } = new();
+    public ObservableCollection<DiscordUser> OfflineMembers { get; } = new();
+    public int OnlineMembersCount => OnlineMembers.Count;
+    public int OfflineMembersCount => OfflineMembers.Count;
+    public bool HasOfflineMembers => OfflineMembers.Count > 0;
 
     [ObservableProperty]
     private string selectedGuildName = "Sélectionnez un serveur";
@@ -253,6 +261,7 @@ public sealed partial class MainViewModel : ObservableObject
         _client.VoiceParticipantsChanged += OnVoiceParticipantsChanged;
         _client.VoiceSpeakingChanged += OnVoiceSpeakingChanged;
         _client.PresenceUpdated += OnPresenceUpdated;
+        _client.GuildMembersUpdated += OnGuildMembersUpdated;
         _client.Friends.CollectionChanged += (_, _) => RefreshFilteredFriends();
 
         _rpcTickerTimer.Interval = TimeSpan.FromSeconds(1);
@@ -290,6 +299,149 @@ public sealed partial class MainViewModel : ObservableObject
         {
             _client.ApplyCachedPresenceToUser(member);
         }
+        SyncOnlineOfflineMembers();
+        RefreshRecentMemberActivities();
+    }
+
+    private void OnGuildMembersUpdated(string guildId)
+    {
+        if (_selectedGuild?.Id == guildId)
+        {
+            var cached = _client.GetCachedGuildMembers(guildId);
+            if (cached.Count > 0)
+            {
+                Protocol.App.RunOnUiThread(() =>
+                {
+                    var seen = new HashSet<string>(ChannelMembers.Select(m => m.Id));
+                    foreach (var m in cached)
+                    {
+                        if (seen.Add(m.Id))
+                        {
+                            ChannelMembers.Add(m);
+                        }
+                    }
+                    SyncOnlineOfflineMembers();
+                    RefreshRecentMemberActivities();
+                });
+            }
+        }
+    }
+
+    public void SyncOnlineOfflineMembers()
+    {
+        Protocol.App.RunOnUiThread(() =>
+        {
+            var allMembers = new List<DiscordUser>(ChannelMembers);
+            if (_selectedGuild != null)
+            {
+                var cached = _client.GetCachedGuildMembers(_selectedGuild.Id);
+                var seen = new HashSet<string>(allMembers.Select(m => m.Id));
+                foreach (var m in cached)
+                {
+                    if (seen.Add(m.Id))
+                    {
+                        allMembers.Add(m);
+                    }
+                }
+            }
+
+            foreach (var m in allMembers)
+            {
+                var (_, vcName) = _client.GetUserVoiceChannel(m.Id);
+                m.CurrentVoiceChannelName = vcName;
+            }
+
+            var online = allMembers.Where(m => m.Status != "offline").OrderBy(m => m.DisplayName).ToList();
+            var offline = allMembers.Where(m => m.Status == "offline").OrderBy(m => m.DisplayName).ToList();
+
+            OnlineMembers.Clear();
+            foreach (var m in online) OnlineMembers.Add(m);
+
+            OfflineMembers.Clear();
+            foreach (var m in offline) OfflineMembers.Add(m);
+
+            OnPropertyChanged(nameof(OnlineMembersCount));
+            OnPropertyChanged(nameof(OfflineMembersCount));
+            OnPropertyChanged(nameof(HasOfflineMembers));
+        });
+    }
+
+    public void RefreshRecentMemberActivities()
+    {
+        Protocol.App.RunOnUiThread(() =>
+        {
+            var allMembers = new List<DiscordUser>(ChannelMembers);
+            if (_selectedGuild != null)
+            {
+                var cached = _client.GetCachedGuildMembers(_selectedGuild.Id);
+                var seen = new HashSet<string>(allMembers.Select(m => m.Id));
+                foreach (var m in cached)
+                {
+                    if (seen.Add(m.Id))
+                    {
+                        allMembers.Add(m);
+                    }
+                }
+            }
+
+            var cards = new List<MemberActivityCardViewModel>();
+            var seenCards = new HashSet<string>();
+
+            foreach (var user in allMembers)
+            {
+                var (_, vcName) = _client.GetUserVoiceChannel(user.Id);
+                user.CurrentVoiceChannelName = vcName;
+
+                if (user.Activities != null && user.Activities.Count > 0)
+                {
+                    foreach (var act in user.Activities.Where(a => a.Type != 4 && a.Type != 6))
+                    {
+                        var key = $"{user.Id}_{act.Name}";
+                        if (seenCards.Add(key))
+                        {
+                            cards.Add(new MemberActivityCardViewModel(user, act, vcName));
+                        }
+                    }
+                }
+                else if (!string.IsNullOrEmpty(vcName))
+                {
+                    var key = $"{user.Id}_voice";
+                    if (seenCards.Add(key))
+                    {
+                        var voiceAct = new DiscordActivity
+                        {
+                            Name = "Salon vocal",
+                            Details = vcName,
+                            Type = 5
+                        };
+                        cards.Add(new MemberActivityCardViewModel(user, voiceAct, vcName));
+                    }
+                }
+            }
+
+            var sorted = cards
+                .OrderByDescending(c => !string.IsNullOrEmpty(c.VoiceChannelName))
+                .ThenByDescending(c => c.HasLargeImage)
+                .ThenBy(c => c.UserName)
+                .ToList();
+
+            RecentMemberActivities.Clear();
+            foreach (var card in sorted)
+            {
+                RecentMemberActivities.Add(card);
+            }
+            OnPropertyChanged(nameof(HasRecentMemberActivities));
+        });
+    }
+
+    public async Task BlockUserAsync(DiscordUser user)
+    {
+        if (user is null || string.IsNullOrWhiteSpace(user.Id)) return;
+        try
+        {
+            await _client.Rest.PutRelationshipAsync(user.Id, type: 2);
+        }
+        catch { }
     }
 
     private void NotifyCurrentUserRichPresenceChanged()
@@ -588,6 +740,9 @@ public sealed partial class MainViewModel : ObservableObject
 
         FilteredChannels.Clear();
         foreach (var ch in Channels) FilteredChannels.Add(ch);
+
+        SyncOnlineOfflineMembers();
+        RefreshRecentMemberActivities();
     }
 
     public async Task SelectChannelAsync(DiscordChannel channel)
@@ -614,6 +769,12 @@ public sealed partial class MainViewModel : ObservableObject
         CancelComposerAction();
         Messages.Clear();
         ChannelMembers.Clear();
+
+        var guildIdForSub = channel.GuildId ?? _selectedGuild?.Id;
+        if (!string.IsNullOrEmpty(guildIdForSub))
+        {
+            _ = _client.SubscribeGuildAsync(guildIdForSub, channel.Id);
+        }
 
         if (channel.Type == DiscordChannelType.GuildVoice)
         {
@@ -680,6 +841,9 @@ public sealed partial class MainViewModel : ObservableObject
             {
             }
         }
+
+        SyncOnlineOfflineMembers();
+        RefreshRecentMemberActivities();
     }
 
     private bool _isLoadingOlderMessages;
@@ -1034,6 +1198,9 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 SyncChannelVoiceMembers(ch);
             }
+
+            SyncOnlineOfflineMembers();
+            RefreshRecentMemberActivities();
         });
     }
 

@@ -198,16 +198,36 @@ public sealed class DiscordGatewayClient : IAsyncDisposable
         return await JsonSerializer.DeserializeAsync<GatewayPayload>(ms, JsonOptions, ct);
     }
 
-    public Task SendGuildSubscriptionsAsync(string guildId, CancellationToken ct = default)
+    public Task SendGuildSubscriptionsAsync(string guildId, string? channelId = null, CancellationToken ct = default)
     {
-        var payload = new
+        object payload;
+        if (!string.IsNullOrEmpty(channelId))
         {
-            guild_id = guildId,
-            typing = true,
-            threads = true,
-            activities = true,
-            members = Array.Empty<string>()
-        };
+            var channelsDict = new Dictionary<string, object>
+            {
+                [channelId] = new[] { new[] { 0, 99 } }
+            };
+            payload = new
+            {
+                guild_id = guildId,
+                typing = true,
+                threads = true,
+                activities = true,
+                members = Array.Empty<string>(),
+                channels = channelsDict
+            };
+        }
+        else
+        {
+            payload = new
+            {
+                guild_id = guildId,
+                typing = true,
+                threads = true,
+                activities = true,
+                members = Array.Empty<string>()
+            };
+        }
         return SendAsync(14, payload, ct);
     }
 

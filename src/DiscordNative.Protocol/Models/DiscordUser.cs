@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
@@ -63,6 +64,8 @@ public sealed class DiscordUser : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasConnectedAccounts));
         OnPropertyChanged(nameof(GameWidgets));
         OnPropertyChanged(nameof(HasGameWidgets));
+        OnPropertyChanged(nameof(DisplayRoles));
+        OnPropertyChanged(nameof(HasDisplayRoles));
     }
 
     public bool HasProfileEnriched { get; set; }
@@ -93,6 +96,57 @@ public sealed class DiscordUser : INotifyPropertyChanged
 
     [JsonPropertyName("roles")]
     public List<string> Roles { get; set; } = new();
+
+    private readonly ObservableCollection<DiscordRole> _displayRoles = new();
+    [JsonIgnore]
+    public ObservableCollection<DiscordRole> DisplayRoles => _displayRoles;
+
+    [JsonIgnore]
+    public bool HasDisplayRoles => _displayRoles.Count > 0;
+
+    public void UpdateDisplayRoles(IEnumerable<DiscordRole>? guildRoles)
+    {
+        _displayRoles.Clear();
+        if (guildRoles != null && Roles != null && Roles.Count > 0)
+        {
+            var roleMap = guildRoles.ToDictionary(r => r.Id);
+            var resolved = new List<DiscordRole>();
+            foreach (var rid in Roles)
+            {
+                if (roleMap.TryGetValue(rid, out var r))
+                {
+                    resolved.Add(r);
+                }
+            }
+            foreach (var r in resolved.OrderByDescending(r => r.Position))
+            {
+                _displayRoles.Add(r);
+            }
+        }
+        OnPropertyChanged(nameof(HasDisplayRoles));
+    }
+
+    private string? _currentVoiceChannelName;
+    [JsonIgnore]
+    public string? CurrentVoiceChannelName
+    {
+        get => _currentVoiceChannelName;
+        set
+        {
+            if (_currentVoiceChannelName != value)
+            {
+                _currentVoiceChannelName = value;
+                OnPropertyChanged(nameof(CurrentVoiceChannelName));
+                OnPropertyChanged(nameof(IsInVoice));
+                OnPropertyChanged(nameof(ActivitySummaryText));
+            }
+        }
+    }
+
+    [JsonIgnore]
+    public bool IsInVoice => !string.IsNullOrWhiteSpace(_currentVoiceChannelName);
+
+    public string QuickMessagePlaceholder => $"Message @{DisplayName}";
 
     public List<int> ThemeColors { get; set; } = new();
     public bool HasCustomThemeColors => ThemeColors.Count >= 2;
@@ -204,7 +258,7 @@ public sealed class DiscordUser : INotifyPropertyChanged
     public bool HasCustomStatus => CustomStatusActivity is not null && !string.IsNullOrWhiteSpace(CustomStatusActivity.State);
     public string CustomStatusText => CustomStatusActivity?.State ?? string.Empty;
     public bool HasRichPresence => PrimaryActivity is not null;
-    public bool HasActivityOrCustomStatus => PrimaryActivity is not null || CustomStatusActivity is not null;
+    public bool HasActivityOrCustomStatus => PrimaryActivity is not null || CustomStatusActivity is not null || IsInVoice;
     public void NotifyActivityTimesChanged()
     {
         PrimaryActivity?.NotifyTimeChanged();
@@ -215,6 +269,10 @@ public sealed class DiscordUser : INotifyPropertyChanged
     {
         get
         {
+            if (IsInVoice)
+            {
+                return $"🔊 {CurrentVoiceChannelName}";
+            }
             var act = PrimaryActivity;
             if (act is not null)
             {
