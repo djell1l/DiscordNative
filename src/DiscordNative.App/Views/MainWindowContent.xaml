@@ -1561,5 +1561,9 @@
                 </Grid>
             </Grid>
         </Grid>
+
+        <!-- Éditeur de Profil Plein Écran 100% fidèle à Discord (Main Profile / Server Profiles + Cosmétiques Nitro grisés si non-Nitro, sans aucun popup Nitro) -->
+        <Grid x:Name="ProfileEditorOverlay" Visibility="Collapsed" Background="#F2111214" Canvas.ZIndex="900"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>
 </UserControl>

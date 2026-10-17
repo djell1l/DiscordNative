@@ -67,6 +67,12 @@ public sealed class DiscordRestClient : IDisposable
                     user.Clan = JsonSerializer.Deserialize<DiscordClan>(clanEl.GetRawText());
                 if (uEl.TryGetProperty("primary_guild", out var pgEl) && pgEl.ValueKind == JsonValueKind.Object)
                     user.PrimaryGuild = JsonSerializer.Deserialize<DiscordClan>(pgEl.GetRawText());
+                if (uEl.TryGetProperty("premium_type", out var ptEl) && ptEl.ValueKind == JsonValueKind.Number && ptEl.TryGetInt32(out int ptVal))
+                    user.PremiumType = ptVal;
+            }
+            if (root.TryGetProperty("premium_type", out var rootPtEl) && rootPtEl.ValueKind == JsonValueKind.Number && rootPtEl.TryGetInt32(out int rootPtVal))
+            {
+                user.PremiumType = rootPtVal;
             }
 
             if (root.TryGetProperty("user_profile", out var upEl) && upEl.ValueKind == JsonValueKind.Object)
@@ -237,6 +243,81 @@ public sealed class DiscordRestClient : IDisposable
         if (pronouns is not null && string.IsNullOrEmpty(updated.Pronouns)) updated.Pronouns = pronouns;
         await EnrichUserProfileAsync(updated, ct);
         return updated;
+    }
+
+    public async Task<(string? nick, string? bio, string? pronouns, string? avatarHash, string? bannerHash)> GetGuildMemberProfileAsync(string guildId, string userId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var resp = await _http.GetAsync($"{ApiBase}/users/{userId}/profile?with_mutual_guilds=false&guild_id={guildId}", ct);
+            if (!resp.IsSuccessStatusCode) return (null, null, null, null, null);
+
+            using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            var root = doc.RootElement;
+            string? nick = null, bio = null, pronouns = null, avatar = null, banner = null;
+
+            if (root.TryGetProperty("guild_member", out var gmEl) && gmEl.ValueKind == JsonValueKind.Object)
+            {
+                if (gmEl.TryGetProperty("nick", out var nEl) && nEl.ValueKind == JsonValueKind.String) nick = nEl.GetString();
+                if (gmEl.TryGetProperty("bio", out var bEl) && bEl.ValueKind == JsonValueKind.String) bio = bEl.GetString();
+                if (gmEl.TryGetProperty("pronouns", out var pEl) && pEl.ValueKind == JsonValueKind.String) pronouns = pEl.GetString();
+                if (gmEl.TryGetProperty("avatar", out var aEl) && aEl.ValueKind == JsonValueKind.String) avatar = aEl.GetString();
+                if (gmEl.TryGetProperty("banner", out var bnEl) && bnEl.ValueKind == JsonValueKind.String) banner = bnEl.GetString();
+            }
+            if (root.TryGetProperty("guild_member_profile", out var gmpEl) && gmpEl.ValueKind == JsonValueKind.Object)
+            {
+                if (gmpEl.TryGetProperty("bio", out var bEl) && bEl.ValueKind == JsonValueKind.String) bio = bEl.GetString();
+                if (gmpEl.TryGetProperty("pronouns", out var pEl) && pEl.ValueKind == JsonValueKind.String) pronouns = pEl.GetString();
+                if (gmpEl.TryGetProperty("banner", out var bnEl) && bnEl.ValueKind == JsonValueKind.String) banner = bnEl.GetString();
+            }
+            return (nick, bio, pronouns, avatar, banner);
+        }
+        catch
+        {
+            return (null, null, null, null, null);
+        }
+    }
+
+    public async Task ModifyGuildMemberProfileAsync(
+        string guildId,
+        string? nick = null,
+        string? bio = null,
+        string? pronouns = null,
+        string? avatarDataUri = null,
+        bool removeAvatar = false,
+        string? bannerDataUri = null,
+        bool removeBanner = false,
+        int? accentColor = null,
+        CancellationToken ct = default)
+    {
+        var memberBody = new Dictionary<string, object?>();
+        if (nick is not null) memberBody["nick"] = string.IsNullOrWhiteSpace(nick) ? null : nick;
+        if (bio is not null) memberBody["bio"] = bio;
+        if (pronouns is not null) memberBody["pronouns"] = pronouns;
+        if (removeAvatar) memberBody["avatar"] = null;
+        else if (!string.IsNullOrWhiteSpace(avatarDataUri)) memberBody["avatar"] = avatarDataUri;
+        if (removeBanner) memberBody["banner"] = null;
+        else if (!string.IsNullOrWhiteSpace(bannerDataUri)) memberBody["banner"] = bannerDataUri;
+
+        if (memberBody.Count > 0)
+        {
+            using var resp = await _http.PatchAsJsonAsync($"{ApiBase}/guilds/{guildId}/members/@me", memberBody, ct);
+        }
+
+        if (bio is not null || pronouns is not null || accentColor.HasValue || removeBanner || !string.IsNullOrWhiteSpace(bannerDataUri))
+        {
+            try
+            {
+                var profBody = new Dictionary<string, object?>();
+                if (bio is not null) profBody["bio"] = bio;
+                if (pronouns is not null) profBody["pronouns"] = pronouns;
+                if (accentColor.HasValue) profBody["accent_color"] = accentColor.Value;
+                if (removeBanner) profBody["banner"] = null;
+                else if (!string.IsNullOrWhiteSpace(bannerDataUri)) profBody["banner"] = bannerDataUri;
+                using var pResp = await _http.PatchAsJsonAsync($"{ApiBase}/guilds/{guildId}/profile/@me", profBody, ct);
+            }
+            catch { }
+        }
     }
 
     public async Task UpdateCustomStatusAsync(string? customStatusText, string? status = null, CancellationToken ct = default)

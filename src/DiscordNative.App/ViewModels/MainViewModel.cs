@@ -410,6 +410,36 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    public async Task<(string? nick, string? bio, string? pronouns, string? avatarHash, string? bannerHash)> GetGuildMemberProfileAsync(string guildId)
+    {
+        if (_client.CurrentUser is null || string.IsNullOrWhiteSpace(guildId)) return (null, null, null, null, null);
+        return await _client.Rest.GetGuildMemberProfileAsync(guildId, _client.CurrentUser.Id);
+    }
+
+    public async Task UpdateGuildMemberProfileAsync(
+        string guildId,
+        string? nick = null,
+        string? bio = null,
+        string? pronouns = null,
+        string? avatarDataUri = null,
+        bool removeAvatar = false,
+        string? bannerDataUri = null,
+        bool removeBanner = false,
+        int? accentColor = null)
+    {
+        if (string.IsNullOrWhiteSpace(guildId)) return;
+        await _client.Rest.ModifyGuildMemberProfileAsync(
+            guildId,
+            nick: nick,
+            bio: bio,
+            pronouns: pronouns,
+            avatarDataUri: avatarDataUri,
+            removeAvatar: removeAvatar,
+            bannerDataUri: bannerDataUri,
+            removeBanner: removeBanner,
+            accentColor: accentColor);
+    }
+
     public void ShowFriendsView()
     {
         _showingFriends = true;

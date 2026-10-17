@@ -1169,9 +1169,21 @@ public sealed partial class MainWindowContent : UserControl
         if (rel != null) CopyToClipboard(rel.User.Id);
     }
 
-    // --- Édition Complète du Profil Utilisateur (avec Recadrage / Zoom interactif de la PP comme sur Discord) ---
-    private async void OnEditProfileClicked(object sender, RoutedEventArgs e)
+    // --- Éditeur de Profil Plein Écran 100% fidèle à Discord (Main Profile / Server Profiles + Cosmétiques Nitro grisés si non-Nitro, sans aucun popup Nitro) ---
+    private void OnEditProfileClicked(object sender, RoutedEventArgs e)
     {
+        ShowDiscordFullProfileEditor();
+    }
+
+    private void ShowDiscordFullProfileEditor()
+    {
+        if (ProfileEditorOverlay is null) return;
+        ProfileEditorOverlay.Children.Clear();
+        ProfileEditorOverlay.Visibility = Visibility.Visible;
+
+        bool hasNitro = ViewModel.CurrentUser?.HasFullNitro == true;
+        DiscordGuild? selectedGuildProfile = null; // null = Main Profile
+
         byte[]? rawAvatarBytes = null;
         string? rawAvatarExt = null;
         string? selectedAvatarDataUri = null;
@@ -1186,68 +1198,541 @@ public sealed partial class MainWindowContent : UserControl
         string? selectedBannerDataUri = null;
         bool removeBanner = false;
 
-        var scroll = new ScrollViewer
+        var rootGrid = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+        rootGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
+        rootGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        // =========================================================================
+        // COLONNE GAUCHE (240px) : Main Profile v (dropdown serveurs), Nameplate, Avatar & Decoration, Banner Color, Profile Effect & Frame, Display Name Style
+        // =========================================================================
+        var leftSidebarBorder = new Border
+        {
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1E, 0x1F, 0x22)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderThickness = new Thickness(0, 0, 1, 0)
+        };
+        Grid.SetColumn(leftSidebarBorder, 0);
+
+        var leftScroll = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            MaxHeight = 560,
-            Width = 450
+            Padding = new Thickness(16, 18, 16, 24)
         };
-        var stack = new StackPanel { Spacing = 14, Padding = new Thickness(0, 0, 12, 0) };
+        var leftStack = new StackPanel { Spacing = 18 };
+        leftScroll.Content = leftStack;
+        leftSidebarBorder.Child = leftScroll;
 
-        // 1. Photo de profil (Avatar) avec aperçu interactif Recadrer / Zoomer (drag + slider)
-        var mediaHeader = new TextBlock { Text = "Avatar (glissez l'image pour recadrer)", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14 };
+        // 1. Sélecteur "Main Profile v" avec tous les serveurs (grisés si !hasNitro, zéro popup Nitro)
+        var profileSelectorHeaderGrid = new Grid();
+        profileSelectorHeaderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        profileSelectorHeaderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        const double ViewportSize = 140.0;
+        var profileDropdownBtn = new Button
+        {
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12, 8, 12, 8),
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        var profileDropdownLabel = new TextBlock
+        {
+            Text = "Main Profile",
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            FontSize = 15,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White)
+        };
+        var profileDropdownBtnContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        profileDropdownBtnContent.Children.Add(profileDropdownLabel);
+        profileDropdownBtnContent.Children.Add(new FontIcon { Glyph = "\uE70D", FontSize = 11, Opacity = 0.8 });
+        profileDropdownBtn.Content = profileDropdownBtnContent;
+
+        var collapseSidebarIcon = new FontIcon
+        {
+            Glyph = "\uE970",
+            FontSize = 13,
+            Opacity = 0.6,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(profileDropdownBtn, 0);
+        Grid.SetColumn(collapseSidebarIcon, 1);
+        profileSelectorHeaderGrid.Children.Add(profileDropdownBtn);
+        profileSelectorHeaderGrid.Children.Add(collapseSidebarIcon);
+        leftStack.Children.Add(profileSelectorHeaderGrid);
+
+        // helper pour créer une carte cosmétique Nitro (grisée si !hasNitro, sans aucun popup)
+        Border WrapNitroCosmetic(FrameworkElement child, string tooltipWhenLocked)
+        {
+            var container = new Border
+            {
+                Opacity = hasNitro ? 1.0 : 0.42,
+                IsHitTestVisible = hasNitro
+            };
+            if (!hasNitro)
+            {
+                ToolTipService.SetToolTip(container, tooltipWhenLocked);
+            }
+            container.Child = child;
+            return container;
+        }
+
+        // 2. Section Nameplate (Nitro)
+        var nameplateSection = new StackPanel { Spacing = 8 };
+        var nameplateHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        nameplateHeader.Children.Add(new TextBlock { Text = "Nameplate", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Opacity = 0.85 });
+        if (!hasNitro)
+        {
+            nameplateHeader.Children.Add(new FontIcon { Glyph = "\uE72E", FontSize = 11, Opacity = 0.65 });
+        }
+        nameplateSection.Children.Add(nameplateHeader);
+
+        var nameplateBox = new Border
+        {
+            Height = 46,
+            CornerRadius = new CornerRadius(10),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(10, 0, 10, 0)
+        };
+        var nameplateGrid = new Grid();
+        nameplateGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        nameplateGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        nameplateGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var npAvatar = new Microsoft.UI.Xaml.Shapes.Ellipse
+        {
+            Width = 26,
+            Height = 26,
+            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x58, 0x65, 0xF2)),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var npBar = new Border
+        {
+            Height = 10,
+            CornerRadius = new CornerRadius(5),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x4E, 0x50, 0x58)),
+            Margin = new Thickness(10, 0, 12, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var npPlus = new Border
+        {
+            Width = 22,
+            Height = 22,
+            CornerRadius = new CornerRadius(11),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new FontIcon
+            {
+                Glyph = "\uE710",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1E, 0x1F, 0x22)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        Grid.SetColumn(npAvatar, 0);
+        Grid.SetColumn(npBar, 1);
+        Grid.SetColumn(npPlus, 2);
+        nameplateGrid.Children.Add(npAvatar);
+        nameplateGrid.Children.Add(npBar);
+        nameplateGrid.Children.Add(npPlus);
+        nameplateBox.Child = nameplateGrid;
+        nameplateSection.Children.Add(WrapNitroCosmetic(nameplateBox, "Nameplate (Disponible avec Nitro)"));
+        leftStack.Children.Add(nameplateSection);
+
+        // 3. Section Avatar & Decoration
+        var avatarDecoSection = new StackPanel { Spacing = 8 };
+        avatarDecoSection.Children.Add(new TextBlock { Text = "Avatar & Decoration", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Opacity = 0.85 });
+
+        var avatarDecoGrid = new Grid { ColumnSpacing = 10 };
+        avatarDecoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        avatarDecoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        // Tuile gauche : Avatar cliquable (ouvre le sélecteur + recadrage)
+        var leftAvatarTileImg = new Image { Width = 68, Height = 68, Stretch = Stretch.UniformToFill };
+        if (!string.IsNullOrWhiteSpace(ViewModel.CurrentUserAvatarUrl))
+        {
+            leftAvatarTileImg.Source = new BitmapImage(new Uri(ViewModel.CurrentUserAvatarUrl));
+        }
+        var leftAvatarClip = new Border
+        {
+            Width = 68,
+            Height = 68,
+            CornerRadius = new CornerRadius(34),
+            Child = leftAvatarTileImg,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var leftAvatarTileBtn = new Button
+        {
+            Height = 96,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(0),
+            Content = leftAvatarClip
+        };
+        ToolTipService.SetToolTip(leftAvatarTileBtn, "Cliquez pour changer ou recadrer votre Avatar");
+        Grid.SetColumn(leftAvatarTileBtn, 0);
+
+        // Tuile droite : Décoration d'avatar (grisée si non-Nitro)
+        var decoCircle = new Grid { Width = 68, Height = 68, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        decoCircle.Children.Add(new Microsoft.UI.Xaml.Shapes.Ellipse
+        {
+            Width = 68,
+            Height = 68,
+            Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x4E, 0x50, 0x58)),
+            StrokeThickness = 2,
+            StrokeDashArray = new DoubleCollection { 3, 2 },
+            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x23, 0x24, 0x28))
+        });
+        decoCircle.Children.Add(new Border
+        {
+            Width = 22,
+            Height = 22,
+            CornerRadius = new CornerRadius(11),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new FontIcon
+            {
+                Glyph = "\uE710",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1E, 0x1F, 0x22)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        });
+        var rightDecoTile = new Border
+        {
+            Height = 96,
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Child = decoCircle
+        };
+        var wrappedDecoTile = WrapNitroCosmetic(rightDecoTile, "Avatar Decoration (Disponible avec Nitro)");
+        Grid.SetColumn(wrappedDecoTile, 1);
+
+        avatarDecoGrid.Children.Add(leftAvatarTileBtn);
+        avatarDecoGrid.Children.Add(wrappedDecoTile);
+        avatarDecoSection.Children.Add(avatarDecoGrid);
+        leftStack.Children.Add(avatarDecoSection);
+
+        // 4. Section Banner Color & Image Banner (Nitro pour image/GIF)
+        var bannerColorSection = new StackPanel { Spacing = 8 };
+        bannerColorSection.Children.Add(new TextBlock { Text = "Banner Color", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Opacity = 0.85 });
+
+        string currentHex = ViewModel.CurrentUser?.AccentColor is int ac ? $"#{ac:X6}" : "#000000";
+        Windows.UI.Color initialBannerColor = Windows.UI.Color.FromArgb(255, 0x11, 0x12, 0x14);
+        if (ViewModel.CurrentUser?.AccentColor is int acVal)
+        {
+            initialBannerColor = Windows.UI.Color.FromArgb(255, (byte)((acVal >> 16) & 0xFF), (byte)((acVal >> 8) & 0xFF), (byte)(acVal & 0xFF));
+        }
+
+        var bannerColorPreviewBorder = new Border
+        {
+            Height = 42,
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(initialBannerColor),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+            BorderThickness = new Thickness(1)
+        };
+        var accentHexInput = new TextBox
+        {
+            PlaceholderText = "#000000",
+            Text = currentHex,
+            MaxLength = 7,
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8)
+        };
+        bannerColorSection.Children.Add(bannerColorPreviewBorder);
+        bannerColorSection.Children.Add(accentHexInput);
+
+        var changeBannerImgBtn = new Button
+        {
+            Content = hasNitro ? "Changer l'image de bannière..." : "🔒 Image de bannière (Nitro)",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            CornerRadius = new CornerRadius(8),
+            FontSize = 12,
+            IsEnabled = hasNitro,
+            Opacity = hasNitro ? 1.0 : 0.45
+        };
+        bannerColorSection.Children.Add(changeBannerImgBtn);
+        leftStack.Children.Add(bannerColorSection);
+
+        // 5. Section Profile Effect & Frame (Nitro — grisé sans popup si !hasNitro)
+        var effectFrameSection = new StackPanel { Spacing = 8 };
+        var effectHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        effectHeader.Children.Add(new TextBlock { Text = "Profile Effect & Frame", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Opacity = 0.85 });
+        if (!hasNitro)
+        {
+            effectHeader.Children.Add(new FontIcon { Glyph = "\uE72E", FontSize = 11, Opacity = 0.65 });
+        }
+        effectFrameSection.Children.Add(effectHeader);
+
+        var effectFrameGrid = new Grid { ColumnSpacing = 10 };
+        effectFrameGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        effectFrameGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        Border CreatePlusMockTile()
+        {
+            var inner = new Border
+            {
+                Width = 64,
+                Height = 76,
+                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x23, 0x24, 0x28)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+                BorderThickness = new Thickness(1),
+                Child = new Border
+                {
+                    Width = 22,
+                    Height = 22,
+                    CornerRadius = new CornerRadius(11),
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new FontIcon
+                    {
+                        Glyph = "\uE710",
+                        FontSize = 11,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1E, 0x1F, 0x22)),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                }
+            };
+            return new Border
+            {
+                Height = 96,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Child = inner
+            };
+        }
+
+        var effectTile = WrapNitroCosmetic(CreatePlusMockTile(), "Profile Effect (Disponible avec Nitro)");
+        var frameTile = WrapNitroCosmetic(CreatePlusMockTile(), "Profile Frame (Disponible avec Nitro)");
+        Grid.SetColumn(effectTile, 0);
+        Grid.SetColumn(frameTile, 1);
+        effectFrameGrid.Children.Add(effectTile);
+        effectFrameGrid.Children.Add(frameTile);
+        effectFrameSection.Children.Add(effectFrameGrid);
+        leftStack.Children.Add(effectFrameSection);
+
+        // 6. Séparateur cadenas discret & Display Name Style (comme en bas à gauche de la capture, SANS bouton/popup Nitro intrusif)
+        var lockDividerGrid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        lockDividerGrid.Children.Add(new Border
+        {
+            Height = 1,
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        if (!hasNitro)
+        {
+            lockDividerGrid.Children.Add(new Border
+            {
+                Width = 28,
+                Height = 28,
+                CornerRadius = new CornerRadius(14),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Child = new FontIcon { Glyph = "\uE72E", FontSize = 12, Opacity = 0.75, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+            });
+        }
+        leftStack.Children.Add(lockDividerGrid);
+
+        var dnsSection = new StackPanel { Spacing = 8 };
+        dnsSection.Children.Add(new TextBlock { Text = "Display Name Style", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Opacity = 0.85 });
+        var dnsPreviewText = new TextBlock
+        {
+            Text = ViewModel.CurrentUserName,
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.ExtraBold,
+            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x9B, 0x84, 0xEE)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var dnsTile = new Border
+        {
+            Height = 48,
+            CornerRadius = new CornerRadius(10),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+            BorderThickness = new Thickness(1),
+            Child = dnsPreviewText
+        };
+        dnsSection.Children.Add(WrapNitroCosmetic(dnsTile, "Display Name Style (Disponible avec Nitro)"));
+        leftStack.Children.Add(dnsSection);
+
+        rootGrid.Children.Add(leftSidebarBorder);
+
+        // =========================================================================
+        // ZONE PRINCIPALE DROITE : Carte Centrale Interactive du Profil + Colonne Droite (Board / Activity / Wishlist) + Bouton Fermer (X)
+        // =========================================================================
+        var mainRightArea = new Grid { Padding = new Thickness(36, 28, 36, 24) };
+        mainRightArea.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        mainRightArea.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetColumn(mainRightArea, 1);
+
+        var contentColumns = new Grid { ColumnSpacing = 32, HorizontalAlignment = HorizontalAlignment.Center };
+        contentColumns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) });
+        contentColumns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(460) });
+        Grid.SetRow(contentColumns, 0);
+
+        // -------------------------------------------------------------------------
+        // CARTE CENTRALE DU PROFIL (400px, fidèle à 100% au screenshot 1)
+        // -------------------------------------------------------------------------
+        var centerCardBorder = new Border
+        {
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x23, 0x24, 0x28)),
+            CornerRadius = new CornerRadius(18),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+        Grid.SetColumn(centerCardBorder, 0);
+
+        var centerCardScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var centerCardRootGrid = new Grid();
+        centerCardScroll.Content = centerCardRootGrid;
+        centerCardBorder.Child = centerCardScroll;
+
+        // Bannière supérieure (135px)
+        var cardBannerBorder = new Border
+        {
+            Height = 135,
+            VerticalAlignment = VerticalAlignment.Top,
+            CornerRadius = new CornerRadius(18, 18, 0, 0),
+            Background = new SolidColorBrush(initialBannerColor)
+        };
+        var cardBannerImg = new Image { Stretch = Stretch.UniformToFill };
+        if (!string.IsNullOrWhiteSpace(ViewModel.CurrentUserBannerUrl))
+        {
+            cardBannerImg.Source = new BitmapImage(new Uri(ViewModel.CurrentUserBannerUrl));
+        }
+        cardBannerBorder.Child = cardBannerImg;
+        centerCardRootGrid.Children.Add(cardBannerBorder);
+
+        // Avatar rond (112x112) qui chevauche la bannière + recadrage par glisser/zoomer direct !
+        const double CardAvatarSize = 112.0;
+        var cardAvatarContainer = new Grid
+        {
+            Width = CardAvatarSize + 12,
+            Height = CardAvatarSize + 12,
+            Margin = new Thickness(22, 74, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top
+        };
+
+        var cardAvatarOuterRing = new Microsoft.UI.Xaml.Shapes.Ellipse
+        {
+            Width = CardAvatarSize + 12,
+            Height = CardAvatarSize + 12,
+            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x23, 0x24, 0x28))
+        };
+        cardAvatarContainer.Children.Add(cardAvatarOuterRing);
+
         var previewCanvas = new Grid
         {
-            Width = ViewportSize,
-            Height = ViewportSize,
-            CornerRadius = new CornerRadius(ViewportSize / 2.0),
-            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 30, 31, 34)),
+            Width = CardAvatarSize,
+            Height = CardAvatarSize,
+            CornerRadius = new CornerRadius(CardAvatarSize / 2.0),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1E, 0x1F, 0x22)),
             HorizontalAlignment = HorizontalAlignment.Center,
-            ManipulationMode = Microsoft.UI.Xaml.Input.ManipulationModes.TranslateX | Microsoft.UI.Xaml.Input.ManipulationModes.TranslateY
+            VerticalAlignment = VerticalAlignment.Center,
+            ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY
         };
-
-        var previewTransform = new Microsoft.UI.Xaml.Media.CompositeTransform();
+        var previewTransform = new CompositeTransform();
         var previewImage = new Image
         {
-            Width = ViewportSize,
-            Height = ViewportSize,
-            Stretch = Microsoft.UI.Xaml.Media.Stretch.UniformToFill,
+            Width = CardAvatarSize,
+            Height = CardAvatarSize,
+            Stretch = Stretch.UniformToFill,
             RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5),
             RenderTransform = previewTransform
         };
         previewCanvas.Children.Add(previewImage);
+        ToolTipService.SetToolTip(previewCanvas, "Glissez l'image à la souris pour recadrer votre PP, ou cliquez sur la tuile Avatar à gauche pour changer d'image");
+        cardAvatarContainer.Children.Add(previewCanvas);
 
-        // Bordure circulaire guide façon Discord
-        var ringGuide = new Microsoft.UI.Xaml.Shapes.Ellipse
+        // Pastille verte de statut sur l'avatar
+        var cardStatusDot = new Microsoft.UI.Xaml.Shapes.Ellipse
         {
-            Width = ViewportSize,
-            Height = ViewportSize,
-            Stroke = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(180, 88, 101, 242)),
-            StrokeThickness = 2,
-            IsHitTestVisible = false
+            Width = 26,
+            Height = 26,
+            Fill = ViewModel.StatusDotBrush,
+            Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x23, 0x24, 0x28)),
+            StrokeThickness = 4,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 4, 4)
         };
-        previewCanvas.Children.Add(ringGuide);
+        cardAvatarContainer.Children.Add(cardStatusDot);
+        centerCardRootGrid.Children.Add(cardAvatarContainer);
 
+        // Bulle de pensée Statut Personnalisé ("+ Best emoji to describe your day?") à droite de l'avatar
+        var customStatusBubble = new Border
+        {
+            Margin = new Thickness(150, 118, 18, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Top,
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(10, 6, 10, 6)
+        };
+        var customStatusInput = new TextBox
+        {
+            PlaceholderText = "⊕ Best emoji to describe your day?",
+            Text = ViewModel.CurrentUser?.CustomStatusActivity?.State ?? "",
+            FontSize = 12,
+            FontStyle = Windows.UI.Text.FontStyle.Italic,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(2)
+        };
+        customStatusBubble.Child = customStatusInput;
+        centerCardRootGrid.Children.Add(customStatusBubble);
+
+        // Contenu sous l'avatar dans la carte centrale
+        var cardBodyStack = new StackPanel
+        {
+            Margin = new Thickness(24, 198, 24, 24),
+            Spacing = 12
+        };
+
+        // Slider de zoom discret pour le recadrage de la PP
         var zoomSlider = new Slider
         {
-            Header = "Zoom du recadrage",
+            Header = "Zoom du recadrage PP",
             Minimum = 1.0,
             Maximum = 3.0,
             StepFrequency = 0.05,
             Value = 1.0,
-            Width = 240,
-            HorizontalAlignment = HorizontalAlignment.Center
+            FontSize = 11,
+            Visibility = Visibility.Collapsed
         };
 
         void ClampPan()
         {
-            double baseScale = ViewportSize / Math.Min(Math.Max(1, imgPixelW), Math.Max(1, imgPixelH));
+            double baseScale = CardAvatarSize / Math.Min(Math.Max(1, imgPixelW), Math.Max(1, imgPixelH));
             double dispW = imgPixelW * baseScale * cropZoom;
             double dispH = imgPixelH * baseScale * cropZoom;
-            double maxPanX = Math.Max(0, (dispW - ViewportSize) / 2.0);
-            double maxPanY = Math.Max(0, (dispH - ViewportSize) / 2.0);
+            double maxPanX = Math.Max(0, (dispW - CardAvatarSize) / 2.0);
+            double maxPanY = Math.Max(0, (dispH - CardAvatarSize) / 2.0);
             cropPanX = Math.Clamp(cropPanX, -maxPanX, maxPanX);
             cropPanY = Math.Clamp(cropPanY, -maxPanY, maxPanY);
             previewTransform.ScaleX = cropZoom;
@@ -1265,23 +1750,14 @@ public sealed partial class MainWindowContent : UserControl
 
         previewCanvas.ManipulationDelta += (_, args) =>
         {
+            zoomSlider.Visibility = Visibility.Visible;
             cropPanX += args.Delta.Translation.X;
             cropPanY += args.Delta.Translation.Y;
             cropChanged = true;
             ClampPan();
         };
 
-        var avatarStatusText = new TextBlock
-        {
-            Text = "Astuce : déplacez l'image à la souris et utilisez le zoom pour recadrer votre PP actuelle ou une nouvelle image.",
-            FontSize = 11,
-            Opacity = 0.65,
-            TextWrapping = TextWrapping.Wrap,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center
-        };
-
-        async Task LoadAvatarBytesIntoPreviewAsync(byte[] bytes, string ext)
+        async Task LoadAvatarBytesIntoCardAsync(byte[] bytes, string ext)
         {
             rawAvatarBytes = bytes;
             rawAvatarExt = ext;
@@ -1298,206 +1774,678 @@ public sealed partial class MainWindowContent : UserControl
             imgPixelH = (int)decoder.PixelHeight;
 
             ms.Position = 0;
-            var bmp = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+            var bmp = new BitmapImage();
             await bmp.SetSourceAsync(ms.AsRandomAccessStream());
             previewImage.Source = bmp;
+            leftAvatarTileImg.Source = bmp;
             ClampPan();
         }
 
-        // Précharger automatiquement la PP actuelle depuis Discord sans avoir besoin de la ré-uploader !
-        if (!string.IsNullOrWhiteSpace(ViewModel.CurrentUser?.Id) && !string.IsNullOrWhiteSpace(ViewModel.CurrentUser?.Avatar))
+        async Task DownloadAndLoadAvatarUrlAsync(string? url)
         {
-            _ = Task.Run(async () =>
+            if (string.IsNullOrWhiteSpace(url)) return;
+            try
             {
-                try
+                using var hc = new System.Net.Http.HttpClient();
+                var bytes = await hc.GetByteArrayAsync(url);
+                DispatcherQueue.TryEnqueue(async () =>
                 {
-                    var url = $"https://cdn.discordapp.com/avatars/{ViewModel.CurrentUser.Id}/{ViewModel.CurrentUser.Avatar}.png?size=512";
-                    using var hc = new System.Net.Http.HttpClient();
-                    var bytes = await hc.GetByteArrayAsync(url);
-                    DispatcherQueue.TryEnqueue(async () =>
+                    if (!removeAvatar)
                     {
-                        if (rawAvatarBytes == null && !removeAvatar)
-                        {
-                            await LoadAvatarBytesIntoPreviewAsync(bytes, ".png");
-                        }
-                    });
-                }
-                catch { }
-            });
+                        await LoadAvatarBytesIntoCardAsync(bytes, ".png");
+                    }
+                });
+            }
+            catch { }
         }
 
-        var pickAvatarBtn = new Button { Content = "Choisir une image...", CornerRadius = new CornerRadius(8) };
-        var resetCropBtn = new Button { Content = "Recentrer", CornerRadius = new CornerRadius(8) };
-        var removeAvatarBtn = new Button { Content = "Supprimer", CornerRadius = new CornerRadius(8) };
+        if (!string.IsNullOrWhiteSpace(ViewModel.CurrentUser?.Id) && !string.IsNullOrWhiteSpace(ViewModel.CurrentUser?.Avatar))
+        {
+            var mainUrl = $"https://cdn.discordapp.com/avatars/{ViewModel.CurrentUser.Id}/{ViewModel.CurrentUser.Avatar}.png?size=512";
+            _ = Task.Run(() => DownloadAndLoadAvatarUrlAsync(mainUrl));
+        }
 
-        pickAvatarBtn.Click += async (_, _) =>
+        leftAvatarTileBtn.Click += async (_, _) =>
         {
             var picked = await PickImageBytesAsync();
             if (picked != null)
             {
                 removeAvatar = false;
-                await LoadAvatarBytesIntoPreviewAsync(picked.Value.bytes, picked.Value.ext);
+                await LoadAvatarBytesIntoCardAsync(picked.Value.bytes, picked.Value.ext);
                 cropChanged = true;
-                avatarStatusText.Text = "Nouvelle image chargée — ajustez le zoom et glissez pour recadrer ✓";
+                zoomSlider.Visibility = Visibility.Visible;
             }
         };
 
-        resetCropBtn.Click += (_, _) =>
+        changeBannerImgBtn.Click += async (_, _) =>
         {
-            cropZoom = 1.0;
-            cropPanX = 0.0;
-            cropPanY = 0.0;
-            zoomSlider.Value = 1.0;
-            ClampPan();
-        };
-
-        removeAvatarBtn.Click += (_, _) =>
-        {
-            rawAvatarBytes = null;
-            selectedAvatarDataUri = null;
-            removeAvatar = true;
-            previewImage.Source = null;
-            avatarStatusText.Text = "L'avatar sera supprimé";
-        };
-
-        var avatarBtnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-        avatarBtnRow.Children.Add(pickAvatarBtn);
-        avatarBtnRow.Children.Add(resetCropBtn);
-        avatarBtnRow.Children.Add(removeAvatarBtn);
-
-        // Bannière
-        var bannerHeader = new TextBlock { Text = "Bannière de profil", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14 };
-        var bannerStatusText = new TextBlock { Text = "Bannière actuelle conservée", FontSize = 12, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center };
-        var pickBannerBtn = new Button { Content = "Changer la bannière...", CornerRadius = new CornerRadius(8) };
-        var removeBannerBtn = new Button { Content = "Supprimer", CornerRadius = new CornerRadius(8) };
-
-        pickBannerBtn.Click += async (_, _) =>
-        {
-            var dataUri = await PickImageAsDataUriAsync();
-            if (dataUri != null)
+            if (!hasNitro) return;
+            var picked = await PickImageBytesAsync();
+            if (picked != null)
             {
-                selectedBannerDataUri = dataUri;
+                var mime = picked.Value.ext switch
+                {
+                    ".gif" => "image/gif",
+                    ".jpg" or ".jpeg" => "image/jpeg",
+                    ".webp" => "image/webp",
+                    _ => "image/png"
+                };
+                selectedBannerDataUri = $"data:{mime};base64,{Convert.ToBase64String(picked.Value.bytes)}";
                 removeBanner = false;
-                bannerStatusText.Text = "Nouvelle bannière sélectionnée ✓";
+                using var ms = new MemoryStream(picked.Value.bytes);
+                var bmp = new BitmapImage();
+                await bmp.SetSourceAsync(ms.AsRandomAccessStream());
+                cardBannerImg.Source = bmp;
             }
         };
-        removeBannerBtn.Click += (_, _) =>
+
+        accentHexInput.TextChanged += (_, _) =>
         {
-            selectedBannerDataUri = null;
-            removeBanner = true;
-            bannerStatusText.Text = "Bannière sera supprimée";
+            var hex = accentHexInput.Text.Trim().TrimStart('#');
+            if (hex.Length == 6 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out int cVal))
+            {
+                var col = Windows.UI.Color.FromArgb(255, (byte)((cVal >> 16) & 0xFF), (byte)((cVal >> 8) & 0xFF), (byte)(cVal & 0xFF));
+                bannerColorPreviewBorder.Background = new SolidColorBrush(col);
+                cardBannerBorder.Background = new SolidColorBrush(col);
+            }
         };
 
-        var bannerRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        bannerRow.Children.Add(pickBannerBtn);
-        bannerRow.Children.Add(removeBannerBtn);
-        bannerRow.Children.Add(bannerStatusText);
-
-        // 2. Identité (Nom d'affichage, Pronoms, Statut personnalisé, Couleur d'accentuation)
-        var nameBox = new TextBox
+        // Nom d'affichage (ex: "Jay" en grand gras)
+        var displayNameBox = new TextBox
         {
-            Header = "Nom d'affichage (Display Name)",
             Text = ViewModel.CurrentUserName,
-            CornerRadius = new CornerRadius(8)
+            PlaceholderText = "Display Name",
+            FontSize = 22,
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1E, 0x1F, 0x22)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 6, 10, 6)
         };
+        displayNameBox.TextChanged += (_, _) => dnsPreviewText.Text = displayNameBox.Text;
+        cardBodyStack.Children.Add(displayNameBox);
+        cardBodyStack.Children.Add(zoomSlider);
 
-        var pronounsBox = new TextBox
+        // Ligne : username • [🌸 DSKY v] + Badges officiels
+        var handleBadgesRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        handleBadgesRow.Children.Add(new TextBlock
         {
-            Header = "Pronoms",
-            PlaceholderText = "ex: il/lui, they/them...",
+            Text = ViewModel.CurrentUser?.Username ?? "user",
+            FontSize = 13,
+            Opacity = 0.85,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        handleBadgesRow.Children.Add(new TextBlock
+        {
+            Text = "•",
+            FontSize = 13,
+            Opacity = 0.5,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        if (ViewModel.CurrentUser?.HasClan == true)
+        {
+            var clanPill = new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(7, 2, 7, 2),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var clanInner = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            if (!string.IsNullOrWhiteSpace(ViewModel.CurrentUserClanBadgeUrl))
+            {
+                clanInner.Children.Add(new Image
+                {
+                    Width = 14,
+                    Height = 14,
+                    Source = new BitmapImage(new Uri(ViewModel.CurrentUserClanBadgeUrl)),
+                    Stretch = Stretch.Uniform
+                });
+            }
+            clanInner.Children.Add(new TextBlock
+            {
+                Text = ViewModel.CurrentUserClanTag,
+                FontSize = 11,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            clanPill.Child = clanInner;
+            handleBadgesRow.Children.Add(clanPill);
+        }
+
+        foreach (var badge in ViewModel.CurrentUserBadges)
+        {
+            var bImg = new Image
+            {
+                Width = 18,
+                Height = 18,
+                Source = new BitmapImage(new Uri(badge.IconUrl)),
+                Stretch = Stretch.Uniform,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ToolTipService.SetToolTip(bImg, badge.Description);
+            handleBadgesRow.Children.Add(bImg);
+        }
+        cardBodyStack.Children.Add(handleBadgesRow);
+
+        // Champ Pronoms
+        var pronounsInput = new TextBox
+        {
+            Header = "Pronouns",
+            PlaceholderText = "Add your pronouns",
             Text = ViewModel.CurrentUserPronouns,
             MaxLength = 40,
+            FontSize = 12,
             CornerRadius = new CornerRadius(8)
         };
+        cardBodyStack.Children.Add(pronounsInput);
 
-        var customStatusBox = new TextBox
+        // Boutons d'aperçu façon Discord : [ 💬 Message ] [ 🏪 ] [ ⋯ ]
+        var actionButtonsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var msgPreviewBtn = new Button
         {
-            Header = "Statut personnalisé",
-            PlaceholderText = "Que fais-tu en ce moment ?",
-            Text = "",
-            MaxLength = 128,
-            CornerRadius = new CornerRadius(8)
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x58, 0x65, 0xF2)),
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(16, 7, 16, 7),
+            BorderThickness = new Thickness(0)
         };
-
-        string currentHex = ViewModel.CurrentUser?.AccentColor is int ac ? $"#{ac:X6}" : "";
-        var accentBox = new TextBox
+        var msgBtnStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        msgBtnStack.Children.Add(new FontIcon { Glyph = "\uE8BD", FontSize = 13 });
+        msgBtnStack.Children.Add(new TextBlock { Text = "Message", FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+        msgPreviewBtn.Content = msgBtnStack;
+        actionButtonsRow.Children.Add(msgPreviewBtn);
+        actionButtonsRow.Children.Add(new Button
         {
-            Header = "Couleur de bannière / d'accentuation (Hex)",
-            PlaceholderText = "#5865F2",
-            Text = currentHex,
-            MaxLength = 7,
-            CornerRadius = new CornerRadius(8)
+            Width = 34,
+            Height = 34,
+            Padding = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderThickness = new Thickness(0),
+            Content = new FontIcon { Glyph = "\uE719", FontSize = 13 }
+        });
+        actionButtonsRow.Children.Add(new Button
+        {
+            Width = 34,
+            Height = 34,
+            Padding = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderThickness = new Thickness(0),
+            Content = new FontIcon { Glyph = "\uE712", FontSize = 13 }
+        });
+        cardBodyStack.Children.Add(actionButtonsRow);
+
+        // Section Bio (avec barre verticale à gauche comme sur le screenshot)
+        var bioSection = new StackPanel { Spacing = 4 };
+        bioSection.Children.Add(new TextBlock { Text = "Bio", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Opacity = 0.7 });
+        var bioQuoteBorder = new Border
+        {
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x4E, 0x50, 0x58)),
+            BorderThickness = new Thickness(3, 0, 0, 0),
+            Padding = new Thickness(10, 0, 0, 0)
         };
-
-        // 3. Bio / À propos de moi
-        var bioBox = new TextBox
+        var bioInput = new TextBox
         {
-            Header = "Bio / À propos de moi (max 190 caractères)",
             Text = ViewModel.CurrentUserBio == "Aucune bio définie." ? "" : ViewModel.CurrentUserBio,
+            PlaceholderText = "Write a bio...",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            Height = 84,
             MaxLength = 190,
+            MinHeight = 56,
+            FontSize = 13,
+            FontStyle = Windows.UI.Text.FontStyle.Italic,
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1E, 0x1F, 0x22)),
+            BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8)
         };
+        bioQuoteBorder.Child = bioInput;
+        bioSection.Children.Add(bioQuoteBorder);
+        cardBodyStack.Children.Add(bioSection);
 
-        // 4. Compte & Sécurité (Nom d'utilisateur @handle et Mot de passe)
-        var accountExpander = new Expander
+        // Section Member Since
+        var memberSinceSection = new StackPanel { Spacing = 2 };
+        memberSinceSection.Children.Add(new TextBlock { Text = "Member Since", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Opacity = 0.7 });
+        memberSinceSection.Children.Add(new TextBlock
         {
-            Header = "Paramètres du compte (@username & mot de passe)",
+            Text = ViewModel.CurrentUser?.MemberSinceText ?? "Sep 21, 2021",
+            FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.Medium
+        });
+        cardBodyStack.Children.Add(memberSinceSection);
+
+        // Section Connections (avec jay-space.com ↗ etc.)
+        var connectionsSection = new StackPanel { Spacing = 6 };
+        connectionsSection.Children.Add(new TextBlock { Text = "Connections", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Opacity = 0.7 });
+        foreach (var conn in ViewModel.CurrentUserConnectedAccounts)
+        {
+            var connRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            connRow.Children.Add(new Border
+            {
+                Width = 22,
+                Height = 22,
+                CornerRadius = new CornerRadius(11),
+                Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+                Child = new TextBlock
+                {
+                    Text = conn.PlatformBadgeText,
+                    FontSize = 10,
+                    FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            });
+            connRow.Children.Add(new TextBlock
+            {
+                Text = conn.Name,
+                FontSize = 13,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            if (conn.HasUrl)
+            {
+                connRow.Children.Add(new FontIcon { Glyph = "\uE8A7", FontSize = 11, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center });
+            }
+            connectionsSection.Children.Add(connRow);
+        }
+        connectionsSection.Children.Add(new TextBlock
+        {
+            Text = "+ Add Connection",
+            FontSize = 12,
+            Opacity = 0.65,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        cardBodyStack.Children.Add(connectionsSection);
+
+        // Section Note (only visible to you)
+        var noteSection = new StackPanel { Spacing = 2 };
+        noteSection.Children.Add(new TextBlock { Text = "Note (only visible to you)", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Opacity = 0.7 });
+        noteSection.Children.Add(new TextBox
+        {
+            PlaceholderText = "Click to add a note",
+            FontSize = 12,
+            FontStyle = Windows.UI.Text.FontStyle.Italic,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0, 2, 0, 2)
+        });
+        cardBodyStack.Children.Add(noteSection);
+
+        centerCardRootGrid.Children.Add(cardBodyStack);
+        contentColumns.Children.Add(centerCardBorder);
+
+        // -------------------------------------------------------------------------
+        // COLONNE DROITE (460px) : Onglets Board | Activity | Wishlist + Cartes Games I Like & Favorite Game
+        // -------------------------------------------------------------------------
+        var rightWidgetsColumn = new StackPanel { Spacing = 18 };
+        Grid.SetColumn(rightWidgetsColumn, 1);
+
+        // Onglets Board | Activity | Wishlist
+        var tabsHeaderRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 24,
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(0, 0, 0, 10)
+        };
+        var boardTab = new StackPanel { Spacing = 4 };
+        boardTab.Children.Add(new TextBlock { Text = "Board", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.Bold });
+        boardTab.Children.Add(new Border { Height = 2, Background = new SolidColorBrush(Microsoft.UI.Colors.White), CornerRadius = new CornerRadius(1) });
+        tabsHeaderRow.Children.Add(boardTab);
+        tabsHeaderRow.Children.Add(new TextBlock { Text = "Activity", FontSize = 14, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Top });
+        tabsHeaderRow.Children.Add(new TextBlock { Text = "Wishlist", FontSize = 14, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Top });
+        rightWidgetsColumn.Children.Add(tabsHeaderRow);
+
+        // En-tête "Your Widgets" + bouton "+ Add Widget"
+        var yourWidgetsHeader = new Grid();
+        yourWidgetsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        yourWidgetsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        yourWidgetsHeader.Children.Add(new TextBlock
+        {
+            Text = "Your Widgets",
+            FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Opacity = 0.75,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        var addWidgetBtn = new Button
+        {
+            Content = "+ Add Widget",
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x38, 0x3A, 0x40)),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(12, 6, 12, 6),
+            FontSize = 12,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+        Grid.SetColumn(addWidgetBtn, 1);
+        yourWidgetsHeader.Children.Add(addWidgetBtn);
+        rightWidgetsColumn.Children.Add(yourWidgetsHeader);
+
+        // Carte 1 : "Games I Like" (Add up to 20 games)
+        var gamesILikeCard = new Border
+        {
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x23, 0x24, 0x28)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(18)
+        };
+        var gamesILikeStack = new StackPanel { Spacing = 12 };
+        var gamesILikeHeader = new Grid();
+        gamesILikeHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gamesILikeHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var gamesILikeTitleStack = new StackPanel { Spacing = 2 };
+        gamesILikeTitleStack.Children.Add(new TextBlock { Text = "Games I Like", FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.Bold });
+        gamesILikeTitleStack.Children.Add(new TextBlock { Text = "Add up to 20 games", FontSize = 12, Opacity = 0.6 });
+        gamesILikeHeader.Children.Add(gamesILikeTitleStack);
+
+        var plusGameBtn = new Border
+        {
+            Width = 32,
+            Height = 32,
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            Child = new FontIcon { Glyph = "\uE710", FontSize = 13, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+        };
+        Grid.SetColumn(plusGameBtn, 1);
+        gamesILikeHeader.Children.Add(plusGameBtn);
+        gamesILikeStack.Children.Add(gamesILikeHeader);
+
+        var gamesCoversRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        foreach (var gw in ViewModel.CurrentUserGameWidgets.Take(4))
+        {
+            var coverBorder = new Border
+            {
+                Width = 96,
+                Height = 128,
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1E, 0x1F, 0x22)),
+                Child = new Image
+                {
+                    Source = new BitmapImage(new Uri(gw.IconUrl)),
+                    Stretch = Stretch.UniformToFill
+                }
+            };
+            ToolTipService.SetToolTip(coverBorder, gw.TooltipText);
+            gamesCoversRow.Children.Add(coverBorder);
+        }
+        gamesILikeStack.Children.Add(gamesCoversRow);
+        gamesILikeCard.Child = gamesILikeStack;
+        rightWidgetsColumn.Children.Add(gamesILikeCard);
+
+        // Carte 2 : "Favorite Game" (Choose 1 game)
+        var favGame = ViewModel.CurrentUserFavoriteGame ?? ViewModel.CurrentUserGameWidgets.FirstOrDefault();
+        if (favGame is not null)
+        {
+            var favGameCard = new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x23, 0x24, 0x28)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(18)
+            };
+            var favStack = new StackPanel { Spacing = 12 };
+            var favHeaderStack = new StackPanel { Spacing = 2 };
+            favHeaderStack.Children.Add(new TextBlock { Text = "Favorite Game", FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.Bold });
+            favHeaderStack.Children.Add(new TextBlock { Text = "Choose 1 game", FontSize = 12, Opacity = 0.6 });
+            favStack.Children.Add(favHeaderStack);
+
+            var favContentGrid = new Grid { ColumnSpacing = 14 };
+            favContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            favContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var favCover = new Border
+            {
+                Width = 92,
+                Height = 118,
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1E, 0x1F, 0x22)),
+                Child = new Image
+                {
+                    Source = new BitmapImage(new Uri(favGame.IconUrl)),
+                    Stretch = Stretch.UniformToFill
+                }
+            };
+            Grid.SetColumn(favCover, 0);
+            favContentGrid.Children.Add(favCover);
+
+            var favDetails = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            favDetails.Children.Add(new TextBlock { Text = favGame.Name, FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.Bold, TextWrapping = TextWrapping.Wrap });
+            if (!string.IsNullOrWhiteSpace(favGame.Comment))
+            {
+                favDetails.Children.Add(new TextBlock { Text = favGame.Comment, FontSize = 13, Opacity = 0.75, TextWrapping = TextWrapping.Wrap });
+            }
+            favDetails.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(8, 3, 8, 3),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Child = new TextBlock { Text = "+ Tags", FontSize = 11, Opacity = 0.75 }
+            });
+            Grid.SetColumn(favDetails, 1);
+            favContentGrid.Children.Add(favDetails);
+
+            favStack.Children.Add(favContentGrid);
+            favGameCard.Child = favStack;
+            rightWidgetsColumn.Children.Add(favGameCard);
+        }
+
+        contentColumns.Children.Add(rightWidgetsColumn);
+        mainRightArea.Children.Add(contentColumns);
+
+        // -------------------------------------------------------------------------
+        // MENU DÉROULANT "Main Profile v" (Image 2 : Main Profile + liste des serveurs, grisés si !hasNitro)
+        // -------------------------------------------------------------------------
+        var dropdownFlyout = new Flyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft };
+        var dropdownScroll = new ScrollViewer { MaxHeight = 320, Width = 220 };
+        var dropdownStack = new StackPanel { Spacing = 4 };
+        dropdownScroll.Content = dropdownStack;
+        dropdownFlyout.Content = dropdownScroll;
+        profileDropdownBtn.Flyout = dropdownFlyout;
+
+        async Task SwitchEditingTargetAsync(DiscordGuild? targetGuild)
+        {
+            selectedGuildProfile = targetGuild;
+            dropdownFlyout.Hide();
+            if (targetGuild is null)
+            {
+                profileDropdownLabel.Text = "Main Profile";
+                displayNameBox.PlaceholderText = "Display Name";
+                displayNameBox.Text = ViewModel.CurrentUserName;
+                pronounsInput.Text = ViewModel.CurrentUserPronouns;
+                bioInput.Text = ViewModel.CurrentUserBio == "Aucune bio définie." ? "" : ViewModel.CurrentUserBio;
+                if (!string.IsNullOrWhiteSpace(ViewModel.CurrentUser?.Id) && !string.IsNullOrWhiteSpace(ViewModel.CurrentUser?.Avatar))
+                {
+                    var mainUrl = $"https://cdn.discordapp.com/avatars/{ViewModel.CurrentUser.Id}/{ViewModel.CurrentUser.Avatar}.png?size=512";
+                    await DownloadAndLoadAvatarUrlAsync(mainUrl);
+                }
+            }
+            else
+            {
+                profileDropdownLabel.Text = targetGuild.Name;
+                displayNameBox.PlaceholderText = $"Pseudo sur {targetGuild.Name}";
+                var (nick, gBio, gPronouns, gAvatar, _) = await ViewModel.GetGuildMemberProfileAsync(targetGuild.Id);
+                displayNameBox.Text = nick ?? ViewModel.CurrentUserName;
+                pronounsInput.Text = gPronouns ?? "";
+                bioInput.Text = gBio ?? "";
+                if (!string.IsNullOrWhiteSpace(gAvatar) && !string.IsNullOrWhiteSpace(ViewModel.CurrentUser?.Id))
+                {
+                    var gUrl = $"https://cdn.discordapp.com/guilds/{targetGuild.Id}/users/{ViewModel.CurrentUser.Id}/avatars/{gAvatar}.png?size=512";
+                    await DownloadAndLoadAvatarUrlAsync(gUrl);
+                }
+            }
+        }
+
+        // Entrée "Main Profile ✓"
+        var mainProfItemBtn = new Button
+        {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            CornerRadius = new CornerRadius(8)
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(8, 7, 8, 7)
         };
-        var accountStack = new StackPanel { Spacing = 10 };
-        var usernameBox = new TextBox
-        {
-            Header = "Nom d'utilisateur (@handle)",
-            Text = ViewModel.CurrentUser?.Username ?? "",
-            CornerRadius = new CornerRadius(8)
-        };
-        var currentPassBox = new PasswordBox
-        {
-            Header = "Mot de passe actuel (requis uniquement pour changer le @handle ou le mot de passe)",
-            CornerRadius = new CornerRadius(8)
-        };
-        var newPassBox = new PasswordBox
-        {
-            Header = "Nouveau mot de passe (optionnel)",
-            CornerRadius = new CornerRadius(8)
-        };
-        accountStack.Children.Add(usernameBox);
-        accountStack.Children.Add(currentPassBox);
-        accountStack.Children.Add(newPassBox);
-        accountExpander.Content = accountStack;
+        var mainProfRow = new Grid();
+        mainProfRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        mainProfRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        mainProfRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        mainProfRow.Children.Add(new FontIcon { Glyph = "\uE77B", FontSize = 14, Margin = new Thickness(0, 0, 10, 0) });
+        var mpText = new TextBlock { Text = "Main Profile", FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(mpText, 1);
+        mainProfRow.Children.Add(mpText);
+        var mpCheck = new FontIcon { Glyph = "\uE73E", FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(mpCheck, 2);
+        mainProfRow.Children.Add(mpCheck);
+        mainProfItemBtn.Content = mainProfRow;
+        mainProfItemBtn.Click += async (_, _) => await SwitchEditingTargetAsync(null);
+        dropdownStack.Children.Add(mainProfItemBtn);
 
-        stack.Children.Add(mediaHeader);
-        stack.Children.Add(previewCanvas);
-        stack.Children.Add(zoomSlider);
-        stack.Children.Add(avatarBtnRow);
-        stack.Children.Add(avatarStatusText);
-        stack.Children.Add(bannerHeader);
-        stack.Children.Add(bannerRow);
-        stack.Children.Add(nameBox);
-        stack.Children.Add(pronounsBox);
-        stack.Children.Add(customStatusBox);
-        stack.Children.Add(accentBox);
-        stack.Children.Add(bioBox);
-        stack.Children.Add(accountExpander);
-        scroll.Content = stack;
+        dropdownStack.Children.Add(new MenuFlyoutSeparator());
 
-        var dialog = new ContentDialog
+        // Liste de tous les serveurs de l'utilisateur (actifs si Nitro, grisés si pas Nitro, aucun popup)
+        foreach (var g in ViewModel.Guilds)
         {
-            Title = "Modifier mon profil",
-            Content = scroll,
-            PrimaryButtonText = "Enregistrer",
-            CloseButtonText = "Annuler",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = this.XamlRoot
+            var gBtn = new Button
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(8, 7, 8, 7),
+                IsEnabled = hasNitro,
+                Opacity = hasNitro ? 1.0 : 0.42
+            };
+            if (!hasNitro)
+            {
+                ToolTipService.SetToolTip(gBtn, "Profils de serveur personnalisés (Disponible avec Nitro)");
+            }
+
+            var gRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+            var gIconBorder = new Border
+            {
+                Width = 22,
+                Height = 22,
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31))
+            };
+            if (g.HasIcon && !string.IsNullOrWhiteSpace(g.IconUrl))
+            {
+                gIconBorder.Child = new Image { Source = new BitmapImage(new Uri(g.IconUrl)), Stretch = Stretch.UniformToFill };
+            }
+            gRow.Children.Add(gIconBorder);
+            gRow.Children.Add(new TextBlock
+            {
+                Text = g.Name,
+                FontSize = 13,
+                FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = 140,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            if (!hasNitro)
+            {
+                gRow.Children.Add(new FontIcon { Glyph = "\uE72E", FontSize = 11, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center });
+            }
+
+            gBtn.Content = gRow;
+            var capturedGuild = g;
+            gBtn.Click += async (_, _) =>
+            {
+                if (!hasNitro) return;
+                await SwitchEditingTargetAsync(capturedGuild);
+            };
+            dropdownStack.Children.Add(gBtn);
+        }
+
+        // -------------------------------------------------------------------------
+        // BARRE D'ENREGISTREMENT EN BAS + BOUTON FERMER (X) EN HAUT À DROITE
+        // -------------------------------------------------------------------------
+        var closeTopRightBtn = new Button
+        {
+            Width = 38,
+            Height = 38,
+            CornerRadius = new CornerRadius(19),
+            Padding = new Thickness(0),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderThickness = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Content = new FontIcon { Glyph = "\uE711", FontSize = 14 }
+        };
+        closeTopRightBtn.Click += (_, _) =>
+        {
+            ProfileEditorOverlay.Visibility = Visibility.Collapsed;
+            ProfileEditorOverlay.Children.Clear();
+        };
+        mainRightArea.Children.Add(closeTopRightBtn);
+
+        var bottomSaveBar = new Border
+        {
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x11, 0x12, 0x14)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x2B, 0x2D, 0x31)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(18, 10, 18, 10),
+            Margin = new Thickness(0, 14, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Width = 860
+        };
+        Grid.SetRow(bottomSaveBar, 1);
+
+        var saveBarGrid = new Grid();
+        saveBarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        saveBarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var saveStatusText = new TextBlock
+        {
+            Text = "Modifiez directement votre profil ci-dessus puis cliquez sur Enregistrer les modifications.",
+            FontSize = 13,
+            Opacity = 0.85,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(saveStatusText, 0);
+        saveBarGrid.Children.Add(saveStatusText);
+
+        var saveBtnsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        var cancelBtn = new Button
+        {
+            Content = "Réinitialiser / Fermer",
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(14, 7, 14, 7)
+        };
+        cancelBtn.Click += (_, _) =>
+        {
+            ProfileEditorOverlay.Visibility = Visibility.Collapsed;
+            ProfileEditorOverlay.Children.Clear();
         };
 
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        var saveBtn = new Button
         {
+            Content = "Enregistrer les modifications",
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x23, 0xA5, 0x5A)),
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(18, 7, 18, 7),
+            BorderThickness = new Thickness(0)
+        };
+
+        saveBtn.Click += async (_, _) =>
+        {
+            saveBtn.IsEnabled = false;
+            saveStatusText.Text = "Enregistrement en cours sur Discord...";
             try
             {
                 if (!removeAvatar && rawAvatarBytes != null && cropChanged)
@@ -1508,51 +2456,64 @@ public sealed partial class MainWindowContent : UserControl
                     }
                     else
                     {
-                        selectedAvatarDataUri = await CropAvatarToPngDataUriAsync(rawAvatarBytes, ViewportSize, cropZoom, cropPanX, cropPanY);
+                        selectedAvatarDataUri = await CropAvatarToPngDataUriAsync(rawAvatarBytes, CardAvatarSize, cropZoom, cropPanX, cropPanY);
                     }
                 }
 
                 int? parsedAccent = null;
-                var hexText = accentBox.Text.Trim().TrimStart('#');
+                var hexText = accentHexInput.Text.Trim().TrimStart('#');
                 if (hexText.Length == 6 && int.TryParse(hexText, System.Globalization.NumberStyles.HexNumber, null, out int colorVal))
                 {
                     parsedAccent = colorVal;
                 }
 
-                string? newUsername = usernameBox.Text.Trim();
-                if (string.Equals(newUsername, ViewModel.CurrentUser?.Username, StringComparison.Ordinal))
+                if (selectedGuildProfile is null)
                 {
-                    newUsername = null;
+                    string? customStatusArg = customStatusInput.Text.Trim();
+                    await ViewModel.UpdateProfileAsync(
+                        newDisplayName: displayNameBox.Text.Trim(),
+                        newBio: bioInput.Text.Trim(),
+                        newPronouns: pronounsInput.Text.Trim(),
+                        avatarDataUri: selectedAvatarDataUri,
+                        removeAvatar: removeAvatar,
+                        bannerDataUri: selectedBannerDataUri,
+                        removeBanner: removeBanner,
+                        accentColor: parsedAccent,
+                        customStatusText: customStatusArg);
+                }
+                else
+                {
+                    await ViewModel.UpdateGuildMemberProfileAsync(
+                        selectedGuildProfile.Id,
+                        nick: displayNameBox.Text.Trim(),
+                        bio: bioInput.Text.Trim(),
+                        pronouns: pronounsInput.Text.Trim(),
+                        avatarDataUri: selectedAvatarDataUri,
+                        removeAvatar: removeAvatar,
+                        bannerDataUri: selectedBannerDataUri,
+                        removeBanner: removeBanner,
+                        accentColor: parsedAccent);
                 }
 
-                string? customStatusArg = string.IsNullOrWhiteSpace(customStatusBox.Text) ? null : customStatusBox.Text.Trim();
-
-                await ViewModel.UpdateProfileAsync(
-                    newDisplayName: nameBox.Text.Trim(),
-                    newBio: bioBox.Text.Trim(),
-                    newPronouns: pronounsBox.Text.Trim(),
-                    avatarDataUri: selectedAvatarDataUri,
-                    removeAvatar: removeAvatar,
-                    bannerDataUri: selectedBannerDataUri,
-                    removeBanner: removeBanner,
-                    accentColor: parsedAccent,
-                    customStatusText: customStatusArg,
-                    newUsername: newUsername,
-                    currentPassword: string.IsNullOrWhiteSpace(currentPassBox.Password) ? null : currentPassBox.Password,
-                    newPassword: string.IsNullOrWhiteSpace(newPassBox.Password) ? null : newPassBox.Password);
+                ProfileEditorOverlay.Visibility = Visibility.Collapsed;
+                ProfileEditorOverlay.Children.Clear();
             }
             catch (Exception ex)
             {
-                var err = new ContentDialog
-                {
-                    Title = "Erreur de modification",
-                    Content = $"Impossible de mettre à jour le profil : {ex.Message}",
-                    CloseButtonText = "OK",
-                    XamlRoot = this.XamlRoot
-                };
-                await err.ShowAsync();
+                saveBtn.IsEnabled = true;
+                saveStatusText.Text = $"Erreur : {ex.Message}";
             }
-        }
+        };
+
+        saveBtnsRow.Children.Add(cancelBtn);
+        saveBtnsRow.Children.Add(saveBtn);
+        Grid.SetColumn(saveBtnsRow, 1);
+        saveBarGrid.Children.Add(saveBtnsRow);
+        bottomSaveBar.Child = saveBarGrid;
+        mainRightArea.Children.Add(bottomSaveBar);
+
+        rootGrid.Children.Add(mainRightArea);
+        ProfileEditorOverlay.Children.Add(rootGrid);
     }
 
     private static async Task<string> CropAvatarToPngDataUriAsync(byte[] sourceBytes, double viewportSize, double zoom, double panX, double panY)

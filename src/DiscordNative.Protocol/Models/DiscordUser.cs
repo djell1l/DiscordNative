@@ -81,6 +81,28 @@ public sealed class DiscordUser : INotifyPropertyChanged
 
     public bool HasPronouns => !string.IsNullOrWhiteSpace(Pronouns);
 
+    [JsonPropertyName("premium_type")]
+    public int PremiumType { get; set; }
+
+    /// <summary>
+    /// Vrai si le compte possède Nitro complet (premium_type == 2) ou si un badge "premium" (Subscriber Nitro) est présent sur le profil.
+    /// </summary>
+    public bool HasFullNitro => PremiumType == 2 || Badges.Any(b => b.Id.StartsWith("premium", StringComparison.OrdinalIgnoreCase));
+
+    public string MemberSinceText
+    {
+        get
+        {
+            if (ulong.TryParse(Id, out ulong snowflake))
+            {
+                long timestampMs = (long)(snowflake >> 22) + 1420070400000L;
+                var dt = DateTimeOffset.FromUnixTimeMilliseconds(timestampMs).LocalDateTime;
+                return dt.ToString("MMM dd, yyyy", System.Globalization.CultureInfo.InvariantCulture);
+            }
+            return "Sep 21, 2021";
+        }
+    }
+
     [JsonPropertyName("clan")]
     public DiscordClan? Clan { get; set; }
 
