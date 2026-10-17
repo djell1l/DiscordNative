@@ -2299,9 +2299,10 @@
             </Border>
         </Grid>
 
-        <!-- Éditeur de Profil Plein Écran 100% fidèle à Discord (Main Profile / Server Profiles + Cosmétiques Nitro grisés si non-Nitro, sans aucun popup Nitro) -->
-        <Grid x:Name="ProfileEditorOverlay" Visibility="Collapsed" Background="#F2111214" Canvas.ZIndex="900"
-              HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+        <!-- Modal Éditeur de Profil (Fenêtre modale centrée non plein écran 100% fidèle à Discord) -->
+        <Grid x:Name="ProfileEditorOverlay" Visibility="Collapsed" Background="#CC000000" Canvas.ZIndex="900"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+              PointerPressed="OnProfileEditorBackdropPointerPressed" />
 
         <!-- Overlay Zoom Plein Écran de l'Avatar (100% identique à media_1792268343564_b3db1471.png) -->
         <Grid x:Name="AvatarZoomOverlay" Visibility="Collapsed" Background="#E6000000" Canvas.ZIndex="999"
