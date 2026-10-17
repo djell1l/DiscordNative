@@ -198,16 +198,51 @@ public sealed class DiscordGatewayClient : IAsyncDisposable
         return await JsonSerializer.DeserializeAsync<GatewayPayload>(ms, JsonOptions, ct);
     }
 
-    public Task SendVoiceStateUpdateAsync(string guildId, string? channelId, bool mute = false, bool deaf = false, CancellationToken ct = default)
+    public Task SendVoiceStateUpdateAsync(string guildId, string? channelId, bool mute = false, bool deaf = false, bool selfVideo = false, bool selfStream = false, CancellationToken ct = default)
     {
         var payload = new
         {
             guild_id = guildId,
             channel_id = channelId,
             self_mute = mute,
-            self_deaf = deaf
+            self_deaf = deaf,
+            self_video = selfVideo,
+            self_stream = selfStream
         };
         return SendAsync(4, payload, ct);
+    }
+
+    public Task SendStreamCreateAsync(string guildId, string channelId, CancellationToken ct = default)
+    {
+        var payload = new
+        {
+            type = "guild",
+            guild_id = guildId,
+            channel_id = channelId,
+            preferred_region = (string?)null
+        };
+        return SendAsync(18, payload, ct);
+    }
+
+    public Task SendStreamDeleteAsync(string streamKey, CancellationToken ct = default)
+    {
+        var payload = new
+        {
+            stream_key = streamKey
+        };
+        return SendAsync(19, payload, ct);
+    }
+
+    public Task SendPresenceUpdateAsync(string status, IEnumerable<object>? activities = null, CancellationToken ct = default)
+    {
+        var payload = new
+        {
+            status = status,
+            since = 0,
+            activities = activities?.ToList() ?? new List<object>(),
+            afk = false
+        };
+        return SendAsync((int)GatewayOpCode.PresenceUpdate, payload, ct);
     }
 
     private Task SendAsync<T>(int opCode, T data, CancellationToken ct)

@@ -38,6 +38,7 @@ public sealed class UpdateInfo
 
 public static class UpdateService
 {
+    public const string CurrentVersion = "v0.4.0";
     private const string RepoOwner = "djell1l";
     private const string RepoName = "Diswin";
     private static readonly HttpClient Http = new();
@@ -58,9 +59,8 @@ public static class UpdateService
 
             var includeExp = string.Equals(App.Settings.Current.UpdateChannel, "Experimental", StringComparison.OrdinalIgnoreCase);
             var latest = releases.FirstOrDefault(r => includeExp || !r.Prerelease) ?? releases[0];
-            var currentVersion = "v0.3.3";
 
-            if (latest.TagName != currentVersion && !latest.TagName.Equals(currentVersion + "-exp", StringComparison.OrdinalIgnoreCase))
+            if (IsNewerVersion(latest.TagName, CurrentVersion))
             {
                 return latest;
             }
@@ -68,6 +68,19 @@ public static class UpdateService
         catch { }
 
         return null;
+    }
+
+    private static bool IsNewerVersion(string remoteTag, string localTag)
+    {
+        if (string.IsNullOrWhiteSpace(remoteTag)) return false;
+        string cleanRemote = remoteTag.Trim().TrimStart('v', 'V').Split('-')[0];
+        string cleanLocal = localTag.Trim().TrimStart('v', 'V').Split('-')[0];
+        if (Version.TryParse(cleanRemote, out var vRemote) && Version.TryParse(cleanLocal, out var vLocal))
+        {
+            return vRemote > vLocal;
+        }
+        return !string.Equals(remoteTag.Trim(), localTag.Trim(), StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(remoteTag.Trim(), localTag.Trim() + "-exp", StringComparison.OrdinalIgnoreCase);
     }
 
     public static async Task ApplyAutomaticUpdateAsync(UpdateInfo update, Action<string> onProgress)

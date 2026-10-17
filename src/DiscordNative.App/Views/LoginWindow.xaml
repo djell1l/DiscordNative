@@ -15,6 +15,12 @@
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                         Width="390" Spacing="16" Padding="0,24">
 
+                <Border Width="72" Height="72" CornerRadius="36" HorizontalAlignment="Center" Margin="0,0,0,4">
+                    <Border.Background>
+                        <ImageBrush ImageSource="ms-appx:///Assets/AppIconCircle.png" Stretch="UniformToFill" />
+                    </Border.Background>
+                </Border>
+
                 <TextBlock Text="Connexion à Diswin" FontSize="24" FontWeight="SemiBold"
                            HorizontalAlignment="Center" Margin="0,0,0,4" />
 

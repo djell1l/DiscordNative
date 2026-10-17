@@ -55,6 +55,9 @@ public sealed class DiscordMessage
     [JsonPropertyName("nonce")]
     public object? Nonce { get; set; }
 
+    [JsonPropertyName("call")]
+    public DiscordCallMetadata? Call { get; set; }
+
     // ---------- Propriétés calculées pour l'UI ----------
 
     /// <summary>Faux = message "suite" du même auteur (en-tête masqué, comme Discord).</summary>
@@ -64,28 +67,79 @@ public sealed class DiscordMessage
     /// <summary>Types 0 (défaut), 19 (réponse), 20 (commande slash), 23 (menu contextuel) = messages normaux.</summary>
     public bool IsSystem => Type is not (0 or 19 or 20 or 23);
     public bool IsNormal => !IsSystem;
+    public bool ShowNormalHeader => IsNormal && ShowHeader;
+
+    private string SafeAuthorName => $"\u200E{Author.DisplayName}\u200E";
+
+    public string SystemIconGlyph => Type switch
+    {
+        1 => "\uE8FA",            // AddFriend (ajout au groupe)
+        2 => "\uE8F8",            // RemoveFriend / Leave (retrait du groupe)
+        3 => "\uE717",            // Phone (appel démarré / terminé)
+        4 or 5 => "\uE70F",       // Edit (changement de nom ou d'icône du salon)
+        6 => "\uE718",            // Pin (message épinglé)
+        7 => "\uE72A",            // Forward arrow (arrivée d'un membre sur le serveur)
+        8 or 9 or 10 or 11 => "\uE734", // Boost / Star
+        12 => "\uE789",           // Megaphone / Salon suivi
+        18 or 21 => "\uE8BD",     // Thread / Fil de discussion
+        24 => "\uE730",           // Shield / AutoMod
+        _ => "\uE946"
+    };
+
+    public string SystemIconColor => Type switch
+    {
+        1 => "#23A55A",           // Vert Discord
+        2 => "#F23F43",           // Rouge Discord
+        3 => "#23A55A",           // Téléphone vert (comme Discord)
+        4 or 5 => "#B5BAC1",      // Gris clair
+        6 => "#B5BAC1",           // Épingle gris clair
+        7 => "#23A55A",           // Flèche verte d'arrivée
+        8 or 9 or 10 or 11 => "#FF73FA", // Rose Nitro Boost
+        12 => "#5865F2",          // Blurple
+        18 or 21 => "#5865F2",    // Blurple
+        24 => "#F23F43",          // Rouge AutoMod
+        _ => "#949BA4"
+    };
 
     public string SystemText => Type switch
     {
-        1 => $"{Author.DisplayName} a ajouté quelqu'un au groupe.",
-        2 => $"{Author.DisplayName} a retiré quelqu'un du groupe.",
-        3 => $"{Author.DisplayName} a démarré un appel.",
-        4 => $"{Author.DisplayName} a changé le nom du salon : {Content}",
-        5 => $"{Author.DisplayName} a changé l'icône du groupe.",
-        6 => $"{Author.DisplayName} a épinglé un message dans ce salon.",
+        1 => $"{SafeAuthorName} a ajouté quelqu'un au groupe.",
+        2 => $"{SafeAuthorName} a retiré quelqu'un du groupe.",
+        3 => FormatCallSystemText(),
+        4 => $"{SafeAuthorName} a changé le nom du salon : {Content}",
+        5 => $"{SafeAuthorName} a changé l'icône du groupe.",
+        6 => $"{SafeAuthorName} a épinglé un message dans ce salon.",
         7 => JoinMessage(),
-        8 => $"{Author.DisplayName} vient de booster le serveur !",
-        9 or 10 or 11 => $"{Author.DisplayName} a boosté le serveur ! Le serveur a atteint un nouveau niveau.",
-        12 => $"{Author.DisplayName} a ajouté un salon suivi.",
-        18 => $"{Author.DisplayName} a créé un fil : {Content}",
+        8 => $"{SafeAuthorName} vient de booster le serveur !",
+        9 or 10 or 11 => $"{SafeAuthorName} a boosté le serveur ! Le serveur a atteint un nouveau niveau.",
+        12 => $"{SafeAuthorName} a ajouté un salon suivi.",
+        18 => $"{SafeAuthorName} a créé un fil : {Content}",
         21 => "Message de départ du fil.",
         24 => "AutoMod a bloqué un message.",
         _ => string.IsNullOrEmpty(Content) ? $"Message système (type {Type})" : Content,
     };
 
+    private string FormatCallSystemText()
+    {
+        if (Call?.EndedTimestamp is DateTimeOffset ended)
+        {
+            var dur = ended - Timestamp;
+            if (dur.TotalSeconds > 0)
+            {
+                string durText = dur.TotalHours >= 1
+                    ? $"{(int)dur.TotalHours} h {dur.Minutes} min"
+                    : dur.TotalMinutes >= 1
+                        ? $"{(int)dur.TotalMinutes} min"
+                        : $"{Math.Max(1, (int)dur.TotalSeconds)} s";
+                return $"{SafeAuthorName} a démarré un appel qui a duré {durText}.";
+            }
+        }
+        return $"{SafeAuthorName} a démarré un appel.";
+    }
+
     private string JoinMessage()
     {
-        var name = Author.DisplayName;
+        var name = SafeAuthorName;
         string[] templates =
         {
             "{0} vient d'arriver. Faites-lui un câlin !",
@@ -337,5 +391,14 @@ public sealed class DiscordPollAnswer
     public string DisplayText => PollMedia?.Emoji?.Name is string e && !string.IsNullOrEmpty(e)
         ? $"{e}  {PollMedia.Text}"
         : PollMedia?.Text ?? $"Option {AnswerId}";
+}
+
+public sealed class DiscordCallMetadata
+{
+    [JsonPropertyName("participants")]
+    public List<string>? Participants { get; set; }
+
+    [JsonPropertyName("ended_timestamp")]
+    public DateTimeOffset? EndedTimestamp { get; set; }
 }
 

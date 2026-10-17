@@ -21,9 +21,27 @@ public sealed partial class SettingsWindow : Window
         ExtendsContentIntoTitleBar = true;
         SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
         SetTitleBar(AppTitleBar);
+        SetWindowIcon();
 
         LoadCurrentSettings();
         _isInitializing = false;
+    }
+
+    private void SetWindowIcon()
+    {
+        try
+        {
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hWnd);
+            var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
+            var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "app.ico");
+            if (System.IO.File.Exists(iconPath))
+            {
+                appWindow.SetIcon(iconPath);
+                MainWindow.ApplyWin32WindowIcon(hWnd, iconPath);
+            }
+        }
+        catch { }
     }
 
     private void LoadCurrentSettings()
@@ -43,12 +61,48 @@ public sealed partial class SettingsWindow : Window
         CompactModeToggle.IsOn = current.CompactMode;
         AnonymizeUploadsToggle.IsOn = current.AnonymizeUploads;
         ConvertLongMessagesToggle.IsOn = current.ConvertLongMessagesToFile;
+        KrispToggle.IsOn = current.EnableKrispNoiseSuppression;
+        UpdateKrispStatusText();
         OpacitySlider.Value = current.BackgroundOpacity;
         BlurSlider.Value = current.BackgroundBlurRadius;
 
         if (!string.IsNullOrEmpty(current.BackgroundImagePath) && System.IO.File.Exists(current.BackgroundImagePath))
         {
             BackgroundPreview.Source = new BitmapImage(new Uri(current.BackgroundImagePath));
+        }
+    }
+
+    private void UpdateKrispStatusText()
+    {
+        if (KrispEngineStatusText is null) return;
+        // Ensure Krisp processor static check has run
+        using var _ = new DiscordNative.Protocol.Voice.KrispAudioProcessor();
+        bool nativeOk = DiscordNative.Protocol.Voice.KrispAudioProcessor.IsNativeKrispLoaded;
+        string engineDesc = DiscordNative.Protocol.Voice.KrispAudioProcessor.LoadedEngineDescription;
+
+        if (!_settings.Current.EnableKrispNoiseSuppression)
+        {
+            KrispEngineStatusText.Text = "Krisp est actuellement désactivé.";
+        }
+        else if (nativeOk)
+        {
+            KrispEngineStatusText.Text = $"✓ Moteur actif : {engineDesc}";
+        }
+        else
+        {
+            KrispEngineStatusText.Text = "✓ Filtre de suppression de bruit adaptatif actif (DSP 48kHz)";
+        }
+    }
+
+    private void OnKrispToggled(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializing) return;
+        _settings.Current.EnableKrispNoiseSuppression = KrispToggle.IsOn;
+        _settings.Save();
+        UpdateKrispStatusText();
+        if (App.MainAppWindow is MainWindow mw && mw.Content is MainWindowContent mwc && mwc.ViewModel is not null)
+        {
+            mwc.ViewModel.SetKrispEnabled(KrispToggle.IsOn);
         }
     }
 
@@ -109,6 +163,53 @@ public sealed partial class SettingsWindow : Window
         {
             _settings.Current.UpdateChannel = (string)item.Tag;
             _settings.Save();
+        }
+    }
+
+    private async void OnCheckUpdatesClicked(object sender, RoutedEventArgs e)
+    {
+        CheckUpdatesButton.IsEnabled = false;
+        UpdateCheckStatusText.Text = "Recherche de mises à jour sur GitHub...";
+        try
+        {
+            var update = await UpdateService.CheckForUpdatesAsync();
+            if (update is not null)
+            {
+                UpdateCheckStatusText.Text = $"Nouvelle version disponible : {update.TagName}";
+                if (App.MainAppWindow is MainWindow mw && mw.Content is MainWindowContent mwc)
+                {
+                    mwc.SetAvailableUpdate(update);
+                }
+
+                var dlg = new ContentDialog
+                {
+                    Title = $"Mise à jour disponible — {update.TagName}",
+                    Content = $"Une nouvelle version ({update.TagName}) est disponible.\nDiswin est open-source : la mise à jour est facultative. Voulez-vous mettre à jour et redémarrer maintenant ?",
+                    PrimaryButtonText = "Mettre à jour et redémarrer",
+                    CloseButtonText = "Plus tard",
+                    DefaultButton = ContentDialogButton.Primary,
+                    XamlRoot = Content.XamlRoot
+                };
+                if (await dlg.ShowAsync() == ContentDialogResult.Primary)
+                {
+                    await UpdateService.ApplyAutomaticUpdateAsync(update, status =>
+                    {
+                        Protocol.App.RunOnUiThread(() => UpdateCheckStatusText.Text = status);
+                    });
+                }
+            }
+            else
+            {
+                UpdateCheckStatusText.Text = $"Diswin est à jour ({UpdateService.CurrentVersion}).";
+            }
+        }
+        catch
+        {
+            UpdateCheckStatusText.Text = "Impossible de vérifier les mises à jour.";
+        }
+        finally
+        {
+            CheckUpdatesButton.IsEnabled = true;
         }
     }
 

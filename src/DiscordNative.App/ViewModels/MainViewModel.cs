@@ -52,6 +52,21 @@ public sealed partial class MainViewModel : ObservableObject
     private bool isDeafened;
 
     [ObservableProperty]
+    private bool isKrispEnabled = true;
+
+    [ObservableProperty]
+    private bool isScreenSharing;
+
+    [ObservableProperty]
+    private bool isCameraEnabled;
+
+    [ObservableProperty]
+    private string screenShareTitle = string.Empty;
+
+    [ObservableProperty]
+    private string screenShareQualityBadge = "1080p • 60 FPS";
+
+    [ObservableProperty]
     private string currentStatus = "online";
 
     [ObservableProperty]
@@ -121,8 +136,61 @@ public sealed partial class MainViewModel : ObservableObject
         _ => Windows.UI.Color.FromArgb(255, 0x80, 0x84, 0x8E)
     });
 
+    public string CurrentStatusDisplayName => CurrentStatus switch
+    {
+        "online" => "En ligne",
+        "idle" => "Inactif",
+        "dnd" => "Ne pas déranger",
+        "invisible" => "Invisible",
+        _ => CurrentStatus
+    };
+
+    public string CurrentUserSubStatusText => !string.IsNullOrWhiteSpace(_client.CurrentUser?.ActivitySummaryText)
+        ? _client.CurrentUser.ActivitySummaryText
+        : CurrentStatusDisplayName;
+
+    public DiscordActivity? CurrentUserRichPresence => _client.CurrentUser?.PrimaryActivity;
+    public Microsoft.UI.Xaml.Visibility CurrentUserRichPresenceVisibility => CurrentUserRichPresence is not null ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public string CurrentUserRpcHeader => CurrentUserRichPresence?.HeaderLabel ?? "EN TRAIN DE JOUER";
+    public string CurrentUserRpcName => CurrentUserRichPresence?.Name ?? string.Empty;
+    public string CurrentUserRpcDetails => CurrentUserRichPresence?.Details ?? string.Empty;
+    public Microsoft.UI.Xaml.Visibility CurrentUserRpcDetailsVisibility => (CurrentUserRichPresence?.HasDetails == true) ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public string CurrentUserRpcState => CurrentUserRichPresence?.State ?? string.Empty;
+    public Microsoft.UI.Xaml.Visibility CurrentUserRpcStateVisibility => (CurrentUserRichPresence?.HasState == true) ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public string CurrentUserRpcElapsed => CurrentUserRichPresence?.ElapsedText ?? string.Empty;
+    public Microsoft.UI.Xaml.Visibility CurrentUserRpcElapsedVisibility => (CurrentUserRichPresence?.HasElapsed == true) ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public string? CurrentUserRpcLargeImageUrl => CurrentUserRichPresence?.LargeImageUrl;
+    public Microsoft.UI.Xaml.Visibility CurrentUserRpcLargeImageVisibility => (CurrentUserRichPresence?.HasLargeImage == true) ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public string? CurrentUserRpcSmallImageUrl => CurrentUserRichPresence?.SmallImageUrl;
+    public Microsoft.UI.Xaml.Visibility CurrentUserRpcSmallImageVisibility => (CurrentUserRichPresence?.HasSmallImage == true) ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
     public double MuteOpacity => IsMuted ? 0.4 : 1.0;
     public double DeafenOpacity => IsDeafened ? 0.4 : 1.0;
+    public double KrispOpacity => IsKrispEnabled ? 1.0 : 0.4;
+    public Microsoft.UI.Xaml.Media.SolidColorBrush KrispIconBrush => new(IsKrispEnabled
+        ? Windows.UI.Color.FromArgb(255, 0x23, 0xA5, 0x5A)
+        : Windows.UI.Color.FromArgb(255, 0x94, 0x9B, 0xA4));
+    public string KrispTooltipText => IsKrispEnabled
+        ? "Suppression de bruit Krisp : Activée (100% Gratuit • Cliquez pour désactiver)"
+        : "Suppression de bruit Krisp : Désactivée (Cliquez pour activer)";
+    public double CurrentUserSpeakingRingOpacity => (_client.CurrentUser?.IsSpeaking == true) ? 1.0 : 0.0;
+
+    public Microsoft.UI.Xaml.Visibility ScreenShareStageVisibility => IsScreenSharing ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public double ScreenShareOpacity => IsScreenSharing ? 1.0 : 0.75;
+    public Microsoft.UI.Xaml.Media.SolidColorBrush ScreenShareIconBrush => new(IsScreenSharing
+        ? Windows.UI.Color.FromArgb(255, 0x23, 0xA5, 0x5A)
+        : Windows.UI.Color.FromArgb(255, 0xFF, 0xFF, 0xFF));
+    public string ScreenShareTooltipText => IsScreenSharing
+        ? $"Partage d'écran en cours ({ScreenShareTitle}) — Cliquez pour modifier ou arrêter"
+        : "Partager votre écran (Go Live 720p/1080p 60 FPS + Audio système)";
+
+    public double CameraOpacity => IsCameraEnabled ? 1.0 : 0.75;
+    public Microsoft.UI.Xaml.Media.SolidColorBrush CameraIconBrush => new(IsCameraEnabled
+        ? Windows.UI.Color.FromArgb(255, 0x23, 0xA5, 0x5A)
+        : Windows.UI.Color.FromArgb(255, 0xFF, 0xFF, 0xFF));
+    public string CameraTooltipText => IsCameraEnabled
+        ? "Caméra activée — Cliquez pour désactiver"
+        : "Activer la caméra vidéo";
 
     public Microsoft.UI.Xaml.Visibility VoiceViewVisibility => IsVoiceChannelSelected ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
     public Microsoft.UI.Xaml.Visibility TextViewVisibility => IsVoiceChannelSelected ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
@@ -135,6 +203,24 @@ public sealed partial class MainViewModel : ObservableObject
     public bool CurrentUserHasBanner => _client.CurrentUser?.HasBanner ?? false;
     public string CurrentUserTag => _client.CurrentUser?.UserTag ?? "@user";
     public string CurrentUserBio => string.IsNullOrWhiteSpace(_client.CurrentUser?.Bio) ? "Aucune bio définie." : _client.CurrentUser.Bio;
+    public string CurrentUserPronouns => _client.CurrentUser?.Pronouns ?? string.Empty;
+    public Microsoft.UI.Xaml.Visibility CurrentUserPronounsVisibility => string.IsNullOrWhiteSpace(_client.CurrentUser?.Pronouns) ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
+
+    public string CurrentUserClanTag => _client.CurrentUser?.ClanTag ?? string.Empty;
+    public string? CurrentUserClanBadgeUrl => _client.CurrentUser?.ClanBadgeUrl;
+    public Microsoft.UI.Xaml.Visibility CurrentUserClanVisibility => (_client.CurrentUser?.HasClan == true) ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
+    public ObservableCollection<DiscordBadge> CurrentUserBadges { get; } = new();
+    public Microsoft.UI.Xaml.Visibility CurrentUserBadgesVisibility => CurrentUserBadges.Count > 0 ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
+    public ObservableCollection<DiscordWidgetGame> CurrentUserGameWidgets { get; } = new();
+    public Microsoft.UI.Xaml.Visibility CurrentUserGameWidgetsVisibility => CurrentUserGameWidgets.Count > 0 ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
+    public ObservableCollection<DiscordConnectedAccount> CurrentUserConnectedAccounts { get; } = new();
+    public Microsoft.UI.Xaml.Visibility CurrentUserConnectedAccountsVisibility => CurrentUserConnectedAccounts.Count > 0 ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
+    public DiscordWidgetGame? CurrentUserFavoriteGame => CurrentUserGameWidgets.FirstOrDefault(g => g.IsFavorite);
+    public Microsoft.UI.Xaml.Visibility CurrentUserFavoriteGameVisibility => CurrentUserFavoriteGame is not null ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
     public Microsoft.UI.Xaml.Visibility ShowingGuildChannels => _showingFriends ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
     public Microsoft.UI.Xaml.Visibility ShowingFriendsView => _showingFriends ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
@@ -142,23 +228,108 @@ public sealed partial class MainViewModel : ObservableObject
     public MainViewModel(DiscordClient client)
     {
         _client = client;
+        IsKrispEnabled = App.Settings.Current.EnableKrispNoiseSuppression;
+        _client.IsKrispEnabled = IsKrispEnabled;
         _client.MessageReceived += OnMessageReceived;
         _client.MessageUpdated += OnMessageUpdated;
         _client.MessageDeleted += OnMessageDeleted;
         _client.ReactionAdded += OnReactionAdded;
+        _client.VoiceParticipantsChanged += OnVoiceParticipantsChanged;
+        _client.VoiceSpeakingChanged += OnVoiceSpeakingChanged;
+        _client.PresenceUpdated += OnPresenceUpdated;
         _client.Friends.CollectionChanged += (_, _) => RefreshFilteredFriends();
+    }
+
+    private void OnVoiceSpeakingChanged(string userId, bool isSpeaking)
+    {
+        if (userId == _client.CurrentUser?.Id)
+        {
+            OnPropertyChanged(nameof(CurrentUserSpeakingRingOpacity));
+        }
+        foreach (var vp in VoiceParticipants.Where(u => u.Id == userId))
+        {
+            vp.IsSpeaking = isSpeaking;
+        }
+    }
+
+    private void OnPresenceUpdated(string userId)
+    {
+        if (userId == _client.CurrentUser?.Id)
+        {
+            NotifyCurrentUserRichPresenceChanged();
+        }
+        foreach (var member in ChannelMembers.Where(m => m.Id == userId))
+        {
+            _client.ApplyCachedPresenceToUser(member);
+        }
+    }
+
+    private void NotifyCurrentUserRichPresenceChanged()
+    {
+        OnPropertyChanged(nameof(CurrentStatusDisplayName));
+        OnPropertyChanged(nameof(CurrentUserSubStatusText));
+        OnPropertyChanged(nameof(CurrentUserRichPresence));
+        OnPropertyChanged(nameof(CurrentUserRichPresenceVisibility));
+        OnPropertyChanged(nameof(CurrentUserRpcHeader));
+        OnPropertyChanged(nameof(CurrentUserRpcName));
+        OnPropertyChanged(nameof(CurrentUserRpcDetails));
+        OnPropertyChanged(nameof(CurrentUserRpcDetailsVisibility));
+        OnPropertyChanged(nameof(CurrentUserRpcState));
+        OnPropertyChanged(nameof(CurrentUserRpcStateVisibility));
+        OnPropertyChanged(nameof(CurrentUserRpcElapsed));
+        OnPropertyChanged(nameof(CurrentUserRpcElapsedVisibility));
+        OnPropertyChanged(nameof(CurrentUserRpcLargeImageUrl));
+        OnPropertyChanged(nameof(CurrentUserRpcLargeImageVisibility));
+        OnPropertyChanged(nameof(CurrentUserRpcSmallImageUrl));
+        OnPropertyChanged(nameof(CurrentUserRpcSmallImageVisibility));
     }
 
     public void OnUserLoaded()
     {
         CurrentUserName = _client.CurrentUser?.DisplayName ?? "Utilisateur inconnu";
+
+        CurrentUserBadges.Clear();
+        if (_client.CurrentUser?.Badges is not null)
+        {
+            foreach (var b in _client.CurrentUser.Badges) CurrentUserBadges.Add(b);
+        }
+
+        CurrentUserGameWidgets.Clear();
+        if (_client.CurrentUser?.GameWidgets is not null)
+        {
+            foreach (var gw in _client.CurrentUser.GameWidgets) CurrentUserGameWidgets.Add(gw);
+        }
+
+        CurrentUserConnectedAccounts.Clear();
+        if (_client.CurrentUser?.ConnectedAccounts is not null)
+        {
+            foreach (var ca in _client.CurrentUser.ConnectedAccounts) CurrentUserConnectedAccounts.Add(ca);
+        }
+
         OnPropertyChanged(nameof(CurrentUser));
         OnPropertyChanged(nameof(CurrentUserAvatarUrl));
         OnPropertyChanged(nameof(CurrentUserBannerUrl));
         OnPropertyChanged(nameof(CurrentUserHasBanner));
         OnPropertyChanged(nameof(CurrentUserTag));
         OnPropertyChanged(nameof(CurrentUserBio));
+        OnPropertyChanged(nameof(CurrentUserPronouns));
+        OnPropertyChanged(nameof(CurrentUserPronounsVisibility));
+        OnPropertyChanged(nameof(CurrentUserClanTag));
+        OnPropertyChanged(nameof(CurrentUserClanBadgeUrl));
+        OnPropertyChanged(nameof(CurrentUserClanVisibility));
+        OnPropertyChanged(nameof(CurrentUserBadgesVisibility));
+        OnPropertyChanged(nameof(CurrentUserGameWidgetsVisibility));
+        OnPropertyChanged(nameof(CurrentUserConnectedAccountsVisibility));
+        OnPropertyChanged(nameof(CurrentUserFavoriteGame));
+        OnPropertyChanged(nameof(CurrentUserFavoriteGameVisibility));
+        NotifyCurrentUserRichPresenceChanged();
         RefreshFilteredFriends();
+    }
+
+    public async Task EnsureUserProfileEnrichedAsync(DiscordUser user)
+    {
+        if (user is null || string.IsNullOrWhiteSpace(user.Id) || user.HasProfileEnriched) return;
+        await _client.Rest.EnrichUserProfileAsync(user);
     }
 
     public void SetFriendsFilter(string filter)
@@ -189,11 +360,44 @@ public sealed partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(MemberListVisibility));
     }
 
-    public async Task UpdateProfileAsync(string newDisplayName, string newBio)
+    public async Task UpdateProfileAsync(
+        string? newDisplayName = null,
+        string? newBio = null,
+        string? newPronouns = null,
+        string? avatarDataUri = null,
+        bool removeAvatar = false,
+        string? bannerDataUri = null,
+        bool removeBanner = false,
+        int? accentColor = null,
+        string? customStatusText = null,
+        string? newUsername = null,
+        string? currentPassword = null,
+        string? newPassword = null)
     {
         try
         {
-            var updated = await _client.Rest.ModifyCurrentUserAsync(globalName: newDisplayName, bio: newBio);
+            if (customStatusText is not null)
+            {
+                await _client.Rest.UpdateCustomStatusAsync(customStatusText);
+                if (!string.IsNullOrWhiteSpace(customStatusText))
+                {
+                    CurrentStatus = customStatusText;
+                }
+            }
+
+            var updated = await _client.Rest.ModifyCurrentUserAsync(
+                globalName: newDisplayName,
+                username: newUsername,
+                currentPassword: currentPassword,
+                newPassword: newPassword,
+                bio: newBio,
+                pronouns: newPronouns,
+                avatarDataUri: avatarDataUri,
+                removeAvatar: removeAvatar,
+                bannerDataUri: bannerDataUri,
+                removeBanner: removeBanner,
+                accentColor: accentColor);
+
             _client.CurrentUser = updated;
             OnUserLoaded();
         }
@@ -275,23 +479,12 @@ public sealed partial class MainViewModel : ObservableObject
 
             if (channel.GuildId != null)
             {
-                _ = _client.JoinVoiceChannelAsync(channel.GuildId, channel.Id);
+                _ = _client.JoinVoiceChannelAsync(channel.GuildId, channel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
                 IsVoiceConnected = true;
                 ConnectedVoiceChannelName = channel.DisplayName;
             }
 
-            VoiceParticipants.Clear();
-            if (_client.CurrentUser != null)
-            {
-                VoiceParticipants.Add(_client.CurrentUser);
-            }
-            if (_client.Friends.Count > 0)
-            {
-                foreach (var friend in _client.Friends.Take(4))
-                {
-                    VoiceParticipants.Add(friend.User);
-                }
-            }
+            RefreshVoiceParticipants(channel.Id);
         }
         else
         {
@@ -314,12 +507,14 @@ public sealed partial class MainViewModel : ObservableObject
                 {
                     foreach (var r in channel.Recipients)
                     {
+                        _client.ApplyCachedPresenceToUser(r);
                         if (seenUsers.Add(r.Id)) ChannelMembers.Add(r);
                     }
                 }
 
                 foreach (var message in history.OrderBy(m => m.Timestamp))
                 {
+                    _client.ApplyCachedPresenceToUser(message.Author);
                     ProcessMessageForGrouping(message, prev);
                     Messages.Add(message);
                     if (seenUsers.Add(message.Author.Id))
@@ -332,6 +527,57 @@ public sealed partial class MainViewModel : ObservableObject
             catch (Exception)
             {
             }
+        }
+    }
+
+    private bool _isLoadingOlderMessages;
+    public async Task<int> LoadOlderMessagesAsync()
+    {
+        if (_selectedChannel is null || _isLoadingOlderMessages) return 0;
+        var oldest = Messages.FirstOrDefault();
+        if (oldest is null) return 0;
+
+        _isLoadingOlderMessages = true;
+        try
+        {
+            var older = await _client.Rest.GetMessagesAsync(_selectedChannel.Id, limit: 50, beforeId: oldest.Id);
+            if (older.Count == 0) return 0;
+
+            var ordered = older.OrderBy(m => m.Timestamp).ToList();
+            DiscordMessage? prev = null;
+            var seenUsers = new HashSet<string>(ChannelMembers.Select(u => u.Id));
+
+            // Insérer au début de la collection
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                var msg = ordered[i];
+                ProcessMessageForGrouping(msg, prev);
+                Messages.Insert(i, msg);
+                if (seenUsers.Add(msg.Author.Id))
+                {
+                    ChannelMembers.Add(msg.Author);
+                }
+                prev = msg;
+            }
+
+            // Mettre à jour l'en-tête du message qui était précédemment le premier
+            if (Messages.Count > ordered.Count)
+            {
+                ProcessMessageForGrouping(Messages[ordered.Count], prev);
+            }
+
+            return older.Count;
+        }
+        catch (Exception ex)
+        {
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DiscordNative_crash.log"),
+                $"[{DateTime.Now}] LoadOlderMessagesAsync failed: {ex}\n\n");
+            return 0;
+        }
+        finally
+        {
+            _isLoadingOlderMessages = false;
         }
     }
 
@@ -548,6 +794,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (message.ChannelId != _selectedChannel?.Id) return;
         Protocol.App.RunOnUiThread(() =>
         {
+            _client.ApplyCachedPresenceToUser(message.Author);
             ProcessMessageForGrouping(message, Messages.LastOrDefault());
             Messages.Add(message);
             if (ChannelMembers.All(u => u.Id != message.Author.Id))
@@ -619,14 +866,39 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    private void OnVoiceParticipantsChanged(string channelId)
+    {
+        if (channelId != _selectedChannel?.Id) return;
+        Protocol.App.RunOnUiThread(() => RefreshVoiceParticipants(channelId));
+    }
+
+    private void RefreshVoiceParticipants(string channelId)
+    {
+        VoiceParticipants.Clear();
+        var seen = new HashSet<string>();
+        foreach (var user in _client.GetVoiceChannelParticipants(channelId))
+        {
+            if (seen.Add(user.Id))
+            {
+                VoiceParticipants.Add(user);
+            }
+        }
+        if (IsVoiceConnected && _selectedChannel?.Id == channelId && _client.CurrentUser is not null && seen.Add(_client.CurrentUser.Id))
+        {
+            VoiceParticipants.Insert(0, _client.CurrentUser);
+        }
+    }
+
     public void DisconnectVoice()
     {
-        if (_selectedChannel?.GuildId != null)
-        {
-            _ = _client.JoinVoiceChannelAsync(_selectedChannel.GuildId, null);
-        }
+        _ = _client.LeaveVoiceChannelAsync();
         IsVoiceConnected = false;
+        IsScreenSharing = false;
+        IsCameraEnabled = false;
+        ScreenShareTitle = string.Empty;
         ConnectedVoiceChannelName = string.Empty;
+        VoiceParticipants.Clear();
+        NotifyScreenShareAndCameraChanged();
         if (IsVoiceChannelSelected)
         {
             IsVoiceChannelSelected = false;
@@ -636,13 +908,91 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    public async Task StartOrJoinVoiceCallInCurrentChannelAsync()
+    {
+        if (_selectedChannel is null) return;
+        IsVoiceChannelSelected = true;
+        OnPropertyChanged(nameof(VoiceViewVisibility));
+        OnPropertyChanged(nameof(TextViewVisibility));
+        OnPropertyChanged(nameof(MemberListVisibility));
+
+        await _client.JoinVoiceChannelAsync(_selectedChannel.GuildId, _selectedChannel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
+        IsVoiceConnected = true;
+        ConnectedVoiceChannelName = _selectedChannel.DisplayName;
+        RefreshVoiceParticipants(_selectedChannel.Id);
+    }
+
+    public async Task StartScreenShareAsync(string title, string qualityBadge, bool shareSystemAudio)
+    {
+        if (!IsVoiceConnected && _selectedChannel is not null)
+        {
+            await StartOrJoinVoiceCallInCurrentChannelAsync();
+        }
+        if (!IsVoiceConnected) return;
+
+        IsScreenSharing = true;
+        ScreenShareTitle = title;
+        ScreenShareQualityBadge = qualityBadge;
+        await _client.StartScreenShareAsync(shareSystemAudio);
+        NotifyScreenShareAndCameraChanged();
+    }
+
+    public async Task StopScreenShareAsync()
+    {
+        if (!IsScreenSharing) return;
+        IsScreenSharing = false;
+        ScreenShareTitle = string.Empty;
+        await _client.StopScreenShareAsync();
+        NotifyScreenShareAndCameraChanged();
+    }
+
+    public async Task ToggleCameraAsync()
+    {
+        if (!IsVoiceConnected && _selectedChannel is not null)
+        {
+            await StartOrJoinVoiceCallInCurrentChannelAsync();
+        }
+        if (!IsVoiceConnected) return;
+
+        IsCameraEnabled = !IsCameraEnabled;
+        await _client.ToggleVideoAsync(IsCameraEnabled);
+        NotifyScreenShareAndCameraChanged();
+    }
+
+    private void NotifyScreenShareAndCameraChanged()
+    {
+        OnPropertyChanged(nameof(ScreenShareStageVisibility));
+        OnPropertyChanged(nameof(ScreenShareOpacity));
+        OnPropertyChanged(nameof(ScreenShareIconBrush));
+        OnPropertyChanged(nameof(ScreenShareTooltipText));
+        OnPropertyChanged(nameof(CameraOpacity));
+        OnPropertyChanged(nameof(CameraIconBrush));
+        OnPropertyChanged(nameof(CameraTooltipText));
+    }
+
+    public async Task CreatePollInCurrentChannelAsync(string question, List<string> answers, int durationHours, bool allowMultiselect)
+    {
+        if (_selectedChannel is null) return;
+        await _client.Rest.CreatePollMessageAsync(_selectedChannel.Id, question, answers, durationHours, allowMultiselect);
+    }
+
+    private DateTimeOffset _lastTypingSent = DateTimeOffset.MinValue;
+    public void NotifyTypingInCurrentChannel()
+    {
+        if (_selectedChannel is null) return;
+        var now = DateTimeOffset.UtcNow;
+        if ((now - _lastTypingSent).TotalSeconds < 8) return;
+        _lastTypingSent = now;
+        _ = _client.Rest.TriggerTypingAsync(_selectedChannel.Id);
+    }
+
     public void ToggleMute()
     {
         IsMuted = !IsMuted;
         OnPropertyChanged(nameof(MuteOpacity));
-        if (_selectedChannel?.GuildId != null && IsVoiceConnected)
+        if (_selectedChannel is not null && IsVoiceConnected)
         {
-            _ = _client.JoinVoiceChannelAsync(_selectedChannel.GuildId, _selectedChannel.Id, IsMuted, IsDeafened);
+            _ = _client.JoinVoiceChannelAsync(_selectedChannel.GuildId, _selectedChannel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
         }
     }
 
@@ -652,16 +1002,42 @@ public sealed partial class MainViewModel : ObservableObject
         if (IsDeafened) IsMuted = true;
         OnPropertyChanged(nameof(DeafenOpacity));
         OnPropertyChanged(nameof(MuteOpacity));
-        if (_selectedChannel?.GuildId != null && IsVoiceConnected)
+        if (_selectedChannel is not null && IsVoiceConnected)
         {
-            _ = _client.JoinVoiceChannelAsync(_selectedChannel.GuildId, _selectedChannel.Id, IsMuted, IsDeafened);
+            _ = _client.JoinVoiceChannelAsync(_selectedChannel.GuildId, _selectedChannel.Id, IsMuted, IsDeafened, IsCameraEnabled, IsScreenSharing);
         }
+    }
+
+    public void ToggleKrisp()
+    {
+        SetKrispEnabled(!IsKrispEnabled);
+    }
+
+    public void SetKrispEnabled(bool enabled)
+    {
+        IsKrispEnabled = enabled;
+        _client.IsKrispEnabled = enabled;
+        App.Settings.Current.EnableKrispNoiseSuppression = enabled;
+        App.Settings.Save();
+        OnPropertyChanged(nameof(KrispOpacity));
+        OnPropertyChanged(nameof(KrispIconBrush));
+        OnPropertyChanged(nameof(KrispTooltipText));
     }
 
     public void SetStatus(string status)
     {
         CurrentStatus = status;
         OnPropertyChanged(nameof(StatusDotBrush));
+        OnPropertyChanged(nameof(CurrentStatusDisplayName));
+        OnPropertyChanged(nameof(CurrentUserSubStatusText));
+        _ = _client.Rest.UpdateCustomStatusAsync(customStatusText: null, status: status);
+        _ = _client.BroadcastCurrentPresenceAsync(status);
+    }
+
+    public async Task SetCustomRichPresenceAsync(DiscordActivity? customActivity)
+    {
+        await _client.SetCustomRichPresenceAsync(customActivity, CurrentStatus);
+        NotifyCurrentUserRichPresenceChanged();
     }
 
     public void ApplySearchFilter(string query)

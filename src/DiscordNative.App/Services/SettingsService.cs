@@ -23,6 +23,7 @@ public sealed class AppSettings
     public string UpdateChannel { get; set; } = "Stable"; // Stable | Experimental
     public bool ShowNotifications { get; set; } = true;
     public bool StartMinimized { get; set; } = false;
+    public bool EnableKrispNoiseSuppression { get; set; } = true;
 }
 
 /// <summary>

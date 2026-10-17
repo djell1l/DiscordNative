@@ -48,10 +48,32 @@ public sealed partial class MainWindow : Window
             if (System.IO.File.Exists(iconPath))
             {
                 appWindow.SetIcon(iconPath);
+                ApplyWin32WindowIcon(hWnd, iconPath);
             }
         }
         catch { }
     }
+
+    internal static void ApplyWin32WindowIcon(IntPtr hWnd, string iconPath)
+    {
+        try
+        {
+            const uint IMAGE_ICON = 1;
+            const uint LR_LOADFROMFILE = 0x00000010;
+            const uint WM_SETICON = 0x0080;
+            IntPtr hIconSmall = LoadImageW(IntPtr.Zero, iconPath, IMAGE_ICON, 16, 16, LR_LOADFROMFILE);
+            IntPtr hIconBig = LoadImageW(IntPtr.Zero, iconPath, IMAGE_ICON, 48, 48, LR_LOADFROMFILE);
+            if (hIconSmall != IntPtr.Zero) SendMessageW(hWnd, WM_SETICON, (IntPtr)0, hIconSmall);
+            if (hIconBig != IntPtr.Zero) SendMessageW(hWnd, WM_SETICON, (IntPtr)1, hIconBig);
+        }
+        catch { }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern IntPtr LoadImageW(IntPtr hInst, string lpszName, uint uType, int cxDesired, int cyDesired, uint fuLoad);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessageW(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
     private async void OnWindowActivatedFirstTime(object sender, WindowActivatedEventArgs args)
     {
@@ -59,6 +81,7 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) => App.Trace("MainWindow fermée");
         try
         {
+            await RootContent.CheckUpdatesDuringSplashAsync();
             RootContent.UpdateSplashStatus("Connexion à Discord...");
             App.Trace("StartAsync...");
             await _client.StartAsync();

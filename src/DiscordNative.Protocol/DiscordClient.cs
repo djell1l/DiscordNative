@@ -1,8 +1,11 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using DiscordNative.Protocol.Gateway;
 using DiscordNative.Protocol.Models;
 using DiscordNative.Protocol.Rest;
+using DiscordNative.Protocol.Rpc;
+using DiscordNative.Protocol.Voice;
 using Microsoft.Extensions.Logging;
 
 namespace DiscordNative.Protocol;
@@ -19,7 +22,53 @@ public sealed class DiscordClient : IAsyncDisposable
     private readonly string _token;
     private readonly ILoggerFactory? _loggerFactory;
     private DiscordGatewayClient? _gateway;
+    private DiscordVoiceClient? _voiceClient;
+    private DiscordLocalRpcServer? _localRpcServer;
+    private DiscordActivity? _localIpcActivity;
+    private DiscordActivity? _customRpcActivity;
+    private string _currentStatus = "online";
+    private string? _voiceSessionId;
+    private string? _pendingVoiceGuildId;
+    private string? _pendingVoiceChannelId;
+    private bool _voiceMuted;
+    private bool _voiceDeafened;
+    private bool _voiceVideo;
+    private bool _voiceStream;
+    private bool _voiceKrispEnabled = true;
+    private bool _voiceSystemAudioSharing;
     private List<string> _orderedGuildIds = new();
+
+    public bool IsKrispEnabled
+    {
+        get => _voiceKrispEnabled;
+        set
+        {
+            _voiceKrispEnabled = value;
+            if (_voiceClient is not null)
+            {
+                _voiceClient.IsKrispEnabled = value;
+            }
+        }
+    }
+
+    public bool IsSystemAudioSharingEnabled
+    {
+        get => _voiceSystemAudioSharing;
+        set
+        {
+            _voiceSystemAudioSharing = value;
+            if (_voiceClient is not null)
+            {
+                _voiceClient.IsSystemAudioSharingEnabled = value;
+            }
+        }
+    }
+
+    // Suivi en temps réel des membres présents dans chaque salon vocal (channelId -> liste des utilisateurs)
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, DiscordUser>> _voiceChannelMembers = new();
+
+    // Cache temps réel de la présence (statut + Rich Presence / Activités) par userId
+    private readonly ConcurrentDictionary<string, (string Status, List<DiscordActivity> Activities)> _userPresences = new();
 
     public DiscordRestClient Rest { get; }
     public DiscordUser? CurrentUser { get; set; }
@@ -31,6 +80,9 @@ public sealed class DiscordClient : IAsyncDisposable
     public event Action<DiscordMessage>? MessageUpdated;
     public event Action<string, string>? MessageDeleted; // channelId, messageId
     public event Action<string, string, DiscordEmoji>? ReactionAdded; // channelId, messageId, emoji
+    public event Action<string>? VoiceParticipantsChanged; // channelId
+    public event Action<string, bool>? VoiceSpeakingChanged; // userId, isSpeaking
+    public event Action<string>? PresenceUpdated; // userId
     public event Action<GatewayConnectionState>? ConnectionStateChanged;
 
     public DiscordClient(string token, ILoggerFactory? loggerFactory = null)
@@ -86,6 +138,10 @@ public sealed class DiscordClient : IAsyncDisposable
         _gateway.EventReceived += OnDispatchEvent;
         _gateway.StateChanged += state => ConnectionStateChanged?.Invoke(state);
         await _gateway.ConnectAsync(ct);
+
+        _localRpcServer = new DiscordLocalRpcServer();
+        _localRpcServer.LocalActivityChanged += OnLocalIpcActivityChanged;
+        _localRpcServer.Start();
     }
 
     public async Task RefreshGuildsAsync(CancellationToken ct = default)
@@ -152,6 +208,13 @@ public sealed class DiscordClient : IAsyncDisposable
                 }
                 break;
             case "GUILD_CREATE":
+                if (evt.Data.TryGetProperty("presences", out var gPresEl) && gPresEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var pEl in gPresEl.EnumerateArray())
+                    {
+                        HandlePresenceUpdate(pEl);
+                    }
+                }
                 var guild = evt.Data.Deserialize<DiscordGuild>(JsonOptions);
                 if (guild is not null && !string.IsNullOrEmpty(guild.Name))
                 {
@@ -187,11 +250,166 @@ public sealed class DiscordClient : IAsyncDisposable
                     }
                 }
                 break;
+            case "PRESENCE_UPDATE":
+                HandlePresenceUpdate(evt.Data);
+                break;
+            case "SESSIONS_REPLACE":
+                HandleSessionsReplace(evt.Data);
+                break;
+            case "VOICE_STATE_UPDATE":
+                HandleVoiceStateUpdate(evt.Data);
+                break;
+            case "VOICE_SERVER_UPDATE":
+                HandleVoiceServerUpdate(evt.Data);
+                break;
         }
+    }
+
+    private void HandleVoiceStateUpdate(JsonElement data)
+    {
+        try
+        {
+            var userId = data.TryGetProperty("user_id", out var uidEl) ? uidEl.GetString() : null;
+            var channelId = data.TryGetProperty("channel_id", out var cidEl) && cidEl.ValueKind == JsonValueKind.String ? cidEl.GetString() : null;
+            var sessionId = data.TryGetProperty("session_id", out var sidEl) ? sidEl.GetString() : null;
+
+            if (string.IsNullOrWhiteSpace(userId)) return;
+
+            if (userId == CurrentUser?.Id && !string.IsNullOrWhiteSpace(sessionId))
+            {
+                _voiceSessionId = sessionId;
+            }
+
+            DiscordUser? userObj = null;
+            if (data.TryGetProperty("member", out var memEl) && memEl.ValueKind == JsonValueKind.Object &&
+                memEl.TryGetProperty("user", out var uEl) && uEl.ValueKind == JsonValueKind.Object)
+            {
+                userObj = uEl.Deserialize<DiscordUser>(JsonOptions);
+            }
+            if (userObj == null && userId == CurrentUser?.Id)
+            {
+                userObj = CurrentUser;
+            }
+            if (userObj == null)
+            {
+                userObj = Friends.Select(f => f.User).FirstOrDefault(u => u.Id == userId)
+                          ?? new DiscordUser { Id = userId!, Username = $"Utilisateur {userId![..Math.Min(4, userId.Length)]}" };
+            }
+
+            bool selfStream = data.TryGetProperty("self_stream", out var ssEl) && ssEl.ValueKind == JsonValueKind.True;
+            bool selfVideo = data.TryGetProperty("self_video", out var svEl) && svEl.ValueKind == JsonValueKind.True;
+            bool selfMute = (data.TryGetProperty("self_mute", out var smEl) && smEl.ValueKind == JsonValueKind.True) ||
+                            (data.TryGetProperty("mute", out var mEl) && mEl.ValueKind == JsonValueKind.True);
+            bool selfDeaf = (data.TryGetProperty("self_deaf", out var sdEl) && sdEl.ValueKind == JsonValueKind.True) ||
+                            (data.TryGetProperty("deaf", out var dEl) && dEl.ValueKind == JsonValueKind.True);
+
+            App.RunOnUiThread(() =>
+            {
+                userObj.IsStreaming = selfStream;
+                userObj.IsVideoEnabled = selfVideo;
+                userObj.IsVoiceMuted = selfMute;
+                userObj.IsVoiceDeafened = selfDeaf;
+            });
+
+            // Retirer l'utilisateur de tous les salons vocaux précédents
+            foreach (var kvp in _voiceChannelMembers)
+            {
+                if (kvp.Value.TryRemove(userId!, out _))
+                {
+                    VoiceParticipantsChanged?.Invoke(kvp.Key);
+                }
+            }
+
+            // L'ajouter au nouveau salon vocal s'il a rejoint
+            if (!string.IsNullOrWhiteSpace(channelId))
+            {
+                var dict = _voiceChannelMembers.GetOrAdd(channelId!, _ => new ConcurrentDictionary<string, DiscordUser>());
+                dict[userId!] = userObj;
+                VoiceParticipantsChanged?.Invoke(channelId!);
+            }
+        }
+        catch { }
+    }
+
+    private void HandleVoiceServerUpdate(JsonElement data)
+    {
+        try
+        {
+            var token = data.TryGetProperty("token", out var tokEl) ? tokEl.GetString() : null;
+            var guildId = data.TryGetProperty("guild_id", out var gidEl) && gidEl.ValueKind == JsonValueKind.String
+                ? gidEl.GetString()
+                : _pendingVoiceGuildId;
+            var endpoint = data.TryGetProperty("endpoint", out var epEl) && epEl.ValueKind == JsonValueKind.String
+                ? epEl.GetString()
+                : null;
+
+            if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(guildId))
+                return;
+
+            var userId = CurrentUser?.Id;
+            var sessionId = _voiceSessionId;
+            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(sessionId))
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    if (_voiceClient is not null)
+                    {
+                        await _voiceClient.DisposeAsync();
+                        _voiceClient = null;
+                    }
+
+                    var vc = new DiscordVoiceClient(guildId!, userId!, sessionId!, token!, endpoint!, _voiceKrispEnabled)
+                    {
+                        IsMuted = _voiceMuted,
+                        IsDeafened = _voiceDeafened,
+                        IsSystemAudioSharingEnabled = _voiceSystemAudioSharing
+                    };
+                    vc.UserSpeakingChanged += (spkUserId, isSpk) =>
+                    {
+                        App.RunOnUiThread(() =>
+                        {
+                            if (CurrentUser?.Id == spkUserId)
+                            {
+                                CurrentUser.IsSpeaking = isSpk;
+                            }
+                            foreach (var chDict in _voiceChannelMembers.Values)
+                            {
+                                if (chDict.TryGetValue(spkUserId, out var u))
+                                {
+                                    u.IsSpeaking = isSpk;
+                                }
+                            }
+                            VoiceSpeakingChanged?.Invoke(spkUserId, isSpk);
+                        });
+                    };
+                    _voiceClient = vc;
+                    await vc.ConnectAsync();
+                }
+                catch { }
+            });
+        }
+        catch { }
+    }
+
+    public List<DiscordUser> GetVoiceChannelParticipants(string channelId)
+    {
+        if (_voiceChannelMembers.TryGetValue(channelId, out var dict))
+        {
+            return dict.Values.ToList();
+        }
+        return new List<DiscordUser>();
     }
 
     private void HandleReady(JsonElement data)
     {
+        if (data.TryGetProperty("session_id", out var sidProp) && sidProp.ValueKind == JsonValueKind.String)
+        {
+            _voiceSessionId = sidProp.GetString();
+        }
+
         if (data.TryGetProperty("user_settings", out var userSettingsEl))
         {
             var readyOrder = DiscordRestClient.ExtractOrderedGuildIds(userSettingsEl);
@@ -199,6 +417,19 @@ public sealed class DiscordClient : IAsyncDisposable
             {
                 _orderedGuildIds = readyOrder;
             }
+        }
+
+        if (data.TryGetProperty("presences", out var readyPresEl) && readyPresEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var pEl in readyPresEl.EnumerateArray())
+            {
+                HandlePresenceUpdate(pEl);
+            }
+        }
+
+        if (data.TryGetProperty("sessions", out var sessionsEl) && sessionsEl.ValueKind == JsonValueKind.Array)
+        {
+            HandleSessionsReplace(sessionsEl);
         }
 
         if (data.TryGetProperty("guilds", out var guildsEl) && guildsEl.ValueKind == JsonValueKind.Array)
@@ -212,6 +443,20 @@ public sealed class DiscordClient : IAsyncDisposable
                 {
                     if (string.IsNullOrEmpty(g.Name) && props.TryGetProperty("name", out var n)) g.Name = n.GetString() ?? "";
                     if (g.Icon is null && props.TryGetProperty("icon", out var i) && i.ValueKind == JsonValueKind.String) g.Icon = i.GetString();
+                }
+                if (gEl.TryGetProperty("presences", out var gpArray) && gpArray.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var pEl in gpArray.EnumerateArray())
+                    {
+                        HandlePresenceUpdate(pEl);
+                    }
+                }
+                if (gEl.TryGetProperty("voice_states", out var vsArray) && vsArray.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var vs in vsArray.EnumerateArray())
+                    {
+                        HandleVoiceStateUpdate(vs);
+                    }
                 }
                 if (!string.IsNullOrEmpty(g.Name))
                 {
@@ -242,6 +487,185 @@ public sealed class DiscordClient : IAsyncDisposable
                     foreach (var c in sorted) PrivateChannels.Add(c);
                 });
             }
+        }
+    }
+
+    private void HandlePresenceUpdate(JsonElement data)
+    {
+        try
+        {
+            string? userId = null;
+            if (data.TryGetProperty("user", out var uEl) && uEl.ValueKind == JsonValueKind.Object &&
+                uEl.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.String)
+            {
+                userId = idEl.GetString();
+            }
+            if (string.IsNullOrWhiteSpace(userId)) return;
+
+            string status = data.TryGetProperty("status", out var stEl) && stEl.ValueKind == JsonValueKind.String
+                ? stEl.GetString() ?? "offline"
+                : "offline";
+
+            var activities = new List<DiscordActivity>();
+            if (data.TryGetProperty("activities", out var actArr) && actArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var aEl in actArr.EnumerateArray())
+                {
+                    var act = aEl.Deserialize<DiscordActivity>(JsonOptions);
+                    if (act is not null && !string.IsNullOrWhiteSpace(act.Name))
+                    {
+                        activities.Add(act);
+                    }
+                }
+            }
+
+            UpdateUserPresenceCache(userId!, status, activities);
+        }
+        catch { }
+    }
+
+    private void HandleSessionsReplace(JsonElement data)
+    {
+        try
+        {
+            if (CurrentUser is null || data.ValueKind != JsonValueKind.Array) return;
+
+            var mergedActivities = new List<DiscordActivity>();
+            string status = _currentStatus;
+
+            foreach (var session in data.EnumerateArray())
+            {
+                if (session.TryGetProperty("status", out var stEl) && stEl.ValueKind == JsonValueKind.String)
+                {
+                    var s = stEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(s) && s != "offline") status = s!;
+                }
+                if (session.TryGetProperty("activities", out var actArr) && actArr.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var aEl in actArr.EnumerateArray())
+                    {
+                        var act = aEl.Deserialize<DiscordActivity>(JsonOptions);
+                        if (act is not null && !string.IsNullOrWhiteSpace(act.Name) && mergedActivities.All(x => x.Name != act.Name))
+                        {
+                            mergedActivities.Add(act);
+                        }
+                    }
+                }
+            }
+
+            if (_localIpcActivity is not null && mergedActivities.All(x => x.Name != _localIpcActivity.Name))
+            {
+                mergedActivities.Insert(0, _localIpcActivity);
+            }
+            if (_customRpcActivity is not null && mergedActivities.All(x => x.Name != _customRpcActivity.Name))
+            {
+                mergedActivities.Insert(0, _customRpcActivity);
+            }
+
+            UpdateUserPresenceCache(CurrentUser.Id, status, mergedActivities);
+        }
+        catch { }
+    }
+
+    private void UpdateUserPresenceCache(string userId, string status, List<DiscordActivity> activities)
+    {
+        _userPresences[userId] = (status, activities);
+
+        App.RunOnUiThread(() =>
+        {
+            if (CurrentUser?.Id == userId)
+            {
+                CurrentUser.Status = status;
+                CurrentUser.Activities = activities;
+                CurrentUser.NotifyPresenceChanged();
+            }
+
+            foreach (var rel in Friends.Where(f => f.User.Id == userId))
+            {
+                rel.User.Status = status;
+                rel.User.Activities = activities;
+                rel.User.NotifyPresenceChanged();
+                rel.NotifyPresenceChanged();
+            }
+
+            foreach (var dm in PrivateChannels)
+            {
+                if (dm.Recipients is null) continue;
+                foreach (var r in dm.Recipients.Where(u => u.Id == userId))
+                {
+                    r.Status = status;
+                    r.Activities = activities;
+                    r.NotifyPresenceChanged();
+                }
+            }
+
+            PresenceUpdated?.Invoke(userId);
+        });
+    }
+
+    public void ApplyCachedPresenceToUser(DiscordUser user)
+    {
+        if (string.IsNullOrWhiteSpace(user.Id)) return;
+        if (_userPresences.TryGetValue(user.Id, out var p))
+        {
+            user.Status = p.Status;
+            user.Activities = p.Activities;
+            user.NotifyPresenceChanged();
+        }
+    }
+
+    private void OnLocalIpcActivityChanged(DiscordActivity? activity)
+    {
+        _localIpcActivity = activity;
+        _ = BroadcastCurrentPresenceAsync();
+    }
+
+    public async Task SetCustomRichPresenceAsync(DiscordActivity? customActivity, string? status = null)
+    {
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            _currentStatus = status!;
+        }
+        _customRpcActivity = customActivity;
+        await BroadcastCurrentPresenceAsync();
+    }
+
+    public async Task BroadcastCurrentPresenceAsync(string? statusOverride = null)
+    {
+        if (!string.IsNullOrWhiteSpace(statusOverride))
+        {
+            _currentStatus = statusOverride!;
+        }
+
+        var activeList = new List<DiscordActivity>();
+        if (_customRpcActivity is not null) activeList.Add(_customRpcActivity);
+        if (_localIpcActivity is not null) activeList.Add(_localIpcActivity);
+
+        if (CurrentUser is not null)
+        {
+            UpdateUserPresenceCache(CurrentUser.Id, _currentStatus, activeList);
+        }
+
+        if (_gateway is not null)
+        {
+            var wireActivities = activeList.Select(a => (object)new
+            {
+                name = a.Name,
+                type = a.Type,
+                application_id = a.ApplicationId,
+                details = a.Details,
+                state = a.State,
+                timestamps = a.Timestamps is not null ? new { start = a.Timestamps.Start, end = a.Timestamps.End } : null,
+                assets = a.Assets is not null ? new
+                {
+                    large_image = a.Assets.LargeImage,
+                    large_text = a.Assets.LargeText,
+                    small_image = a.Assets.SmallImage,
+                    small_text = a.Assets.SmallText
+                } : null
+            }).ToList();
+
+            await _gateway.SendPresenceUpdateAsync(_currentStatus, wireActivities);
         }
     }
 
@@ -294,14 +718,128 @@ public sealed class DiscordClient : IAsyncDisposable
         }
     }
 
-    public Task JoinVoiceChannelAsync(string guildId, string? channelId, bool mute = false, bool deaf = false)
+    public async Task JoinVoiceChannelAsync(string guildId, string? channelId, bool mute = false, bool deaf = false, bool selfVideo = false, bool selfStream = false)
     {
-        if (_gateway is not null) return _gateway.SendVoiceStateUpdateAsync(guildId, channelId, mute, deaf);
-        return Task.CompletedTask;
+        bool wasStreaming = _voiceStream;
+        _voiceMuted = mute;
+        _voiceDeafened = deaf;
+        _voiceVideo = selfVideo;
+        _voiceStream = selfStream;
+
+        if (_voiceClient is not null)
+        {
+            _voiceClient.IsMuted = mute;
+            _voiceClient.IsDeafened = deaf;
+        }
+
+        if (CurrentUser is not null)
+        {
+            App.RunOnUiThread(() =>
+            {
+                CurrentUser.IsVoiceMuted = mute;
+                CurrentUser.IsVoiceDeafened = deaf;
+                CurrentUser.IsVideoEnabled = selfVideo;
+                CurrentUser.IsStreaming = selfStream;
+            });
+        }
+
+        if (channelId is null && _voiceClient is not null)
+        {
+            await _voiceClient.DisposeAsync();
+            _voiceClient = null;
+        }
+        else if (channelId is not null)
+        {
+            _pendingVoiceGuildId = guildId;
+            _pendingVoiceChannelId = channelId;
+        }
+
+        if (_gateway is not null)
+        {
+            await _gateway.SendVoiceStateUpdateAsync(guildId, channelId, mute, deaf, selfVideo, selfStream);
+
+            if (channelId is not null && CurrentUser is not null)
+            {
+                if (selfStream && !wasStreaming)
+                {
+                    await _gateway.SendStreamCreateAsync(guildId, channelId);
+                }
+                else if (!selfStream && wasStreaming)
+                {
+                    await _gateway.SendStreamDeleteAsync($"guild:{guildId}:{channelId}:{CurrentUser.Id}");
+                }
+            }
+        }
+    }
+
+    public async Task LeaveVoiceChannelAsync()
+    {
+        var guildId = _pendingVoiceGuildId;
+        var channelId = _pendingVoiceChannelId;
+        bool wasStreaming = _voiceStream;
+        _pendingVoiceGuildId = null;
+        _pendingVoiceChannelId = null;
+        _voiceVideo = false;
+        _voiceStream = false;
+
+        if (CurrentUser is not null)
+        {
+            App.RunOnUiThread(() =>
+            {
+                CurrentUser.IsSpeaking = false;
+                CurrentUser.IsStreaming = false;
+                CurrentUser.IsVideoEnabled = false;
+                CurrentUser.IsVoiceMuted = false;
+                CurrentUser.IsVoiceDeafened = false;
+            });
+        }
+
+        if (_voiceClient is not null)
+        {
+            await _voiceClient.DisposeAsync();
+            _voiceClient = null;
+        }
+
+        if (_gateway is not null && !string.IsNullOrEmpty(guildId))
+        {
+            if (wasStreaming && !string.IsNullOrEmpty(channelId) && CurrentUser is not null)
+            {
+                try { await _gateway.SendStreamDeleteAsync($"guild:{guildId}:{channelId}:{CurrentUser.Id}"); } catch { }
+            }
+            await _gateway.SendVoiceStateUpdateAsync(guildId, null, _voiceMuted, _voiceDeafened, false, false);
+        }
+    }
+
+    public async Task StartScreenShareAsync(bool shareSystemAudio = true)
+    {
+        IsSystemAudioSharingEnabled = shareSystemAudio;
+        if (_pendingVoiceGuildId is not null && _pendingVoiceChannelId is not null)
+        {
+            await JoinVoiceChannelAsync(_pendingVoiceGuildId, _pendingVoiceChannelId, _voiceMuted, _voiceDeafened, _voiceVideo, selfStream: true);
+        }
+    }
+
+    public async Task StopScreenShareAsync()
+    {
+        IsSystemAudioSharingEnabled = false;
+        if (_pendingVoiceGuildId is not null && _pendingVoiceChannelId is not null)
+        {
+            await JoinVoiceChannelAsync(_pendingVoiceGuildId, _pendingVoiceChannelId, _voiceMuted, _voiceDeafened, _voiceVideo, selfStream: false);
+        }
+    }
+
+    public async Task ToggleVideoAsync(bool enabled)
+    {
+        if (_pendingVoiceGuildId is not null && _pendingVoiceChannelId is not null)
+        {
+            await JoinVoiceChannelAsync(_pendingVoiceGuildId, _pendingVoiceChannelId, _voiceMuted, _voiceDeafened, selfVideo: enabled, _voiceStream);
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
+        if (_localRpcServer is not null) await _localRpcServer.DisposeAsync();
+        if (_voiceClient is not null) await _voiceClient.DisposeAsync();
         Rest.Dispose();
         if (_gateway is not null) await _gateway.DisposeAsync();
     }

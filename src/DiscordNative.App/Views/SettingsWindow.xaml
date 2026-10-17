@@ -90,6 +90,32 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Voix & Audio (Krisp Officiel 100% Gratuit) -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="12" Padding="18">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE9F5;" FontSize="18" Foreground="#23A55A" VerticalAlignment="Center" />
+                            <TextBlock Text="Voix &amp; Audio — Suppression de bruit Krisp" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Border Background="#23A55A" CornerRadius="6" Padding="6,2" VerticalAlignment="Center">
+                                <TextBlock Text="100% GRATUIT" FontSize="10" FontWeight="Bold" Foreground="White" />
+                            </Border>
+                        </StackPanel>
+
+                        <TextBlock Text="Supprime les bruits de fond (clavier, ventilateur, souffle) en temps réel dans vos appels vocaux en utilisant directement le moteur neuronal officiel Krisp de Discord."
+                                   Opacity="0.75" TextWrapping="Wrap" FontSize="13" />
+
+                        <ToggleSwitch x:Name="KrispToggle"
+                                      Header="Suppression de bruit Krisp (Neural Noise Cancellation)"
+                                      OnContent="Activé"
+                                      OffContent="Désactivé"
+                                      Toggled="OnKrispToggled" />
+
+                        <TextBlock x:Name="KrispEngineStatusText" FontSize="12" Foreground="#23A55A" FontWeight="SemiBold" Opacity="0.9" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
                 <!-- Mises à jour, Sauvegarde & Diagnostics -->
                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -102,6 +128,11 @@
                             <ComboBoxItem Content="Stable (Recommandé)" Tag="Stable" />
                             <ComboBoxItem Content="Bleeding Edge (Mises à jour rapides &amp; préversions)" Tag="Experimental" />
                         </ComboBox>
+
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <Button x:Name="CheckUpdatesButton" Content="Vérifier les mises à jour" Click="OnCheckUpdatesClicked" />
+                            <TextBlock x:Name="UpdateCheckStatusText" FontSize="12" Opacity="0.8" VerticalAlignment="Center" />
+                        </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Button Content="Exporter les paramètres..." Click="OnExportSettingsClicked" />

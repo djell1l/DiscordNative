@@ -49,6 +49,7 @@ public sealed partial class LoginWindow : Window
             if (System.IO.File.Exists(iconPath))
             {
                 appWindow.SetIcon(iconPath);
+                MainWindow.ApplyWin32WindowIcon(hWnd, iconPath);
             }
         }
         catch { }

@@ -25,20 +25,241 @@ public sealed class DiscordRestClient : IDisposable
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 
-    public Task<DiscordUser?> GetCurrentUserAsync(CancellationToken ct = default) =>
-        _http.GetFromJsonAsync<DiscordUser>($"{ApiBase}/users/@me", ct);
-
-    public async Task<DiscordUser> ModifyCurrentUserAsync(string? globalName = null, string? username = null, string? bio = null, CancellationToken ct = default)
+    public async Task<DiscordUser?> GetCurrentUserAsync(CancellationToken ct = default)
     {
-        var body = new Dictionary<string, object?>();
-        if (globalName is not null) body["global_name"] = globalName;
-        if (username is not null) body["username"] = username;
-        if (bio is not null) body["bio"] = bio;
+        var user = await _http.GetFromJsonAsync<DiscordUser>($"{ApiBase}/users/@me", ct);
+        if (user is not null)
+        {
+            await EnrichUserProfileAsync(user, ct);
+            if (user.ConnectedAccounts.Count == 0)
+            {
+                var visibleConns = await GetCurrentUserVisibleConnectionsAsync(ct);
+                if (visibleConns.Count > 0)
+                {
+                    user.ConnectedAccounts = visibleConns;
+                    Protocol.App.RunOnUiThread(() => user.NotifyProfileEnriched());
+                }
+            }
+        }
+        return user;
+    }
 
-        var response = await _http.PatchAsJsonAsync($"{ApiBase}/users/@me", body, ct);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<DiscordUser>(cancellationToken: ct)
+    public async Task EnrichUserProfileAsync(DiscordUser user, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(user.Id)) return;
+        try
+        {
+            using var resp = await _http.GetAsync($"{ApiBase}/users/{user.Id}/profile?with_mutual_guilds=false", ct);
+            if (!resp.IsSuccessStatusCode) return;
+
+            using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("user", out var uEl))
+            {
+                if (uEl.TryGetProperty("bio", out var bioEl) && bioEl.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(user.Bio))
+                    user.Bio = bioEl.GetString();
+                if (uEl.TryGetProperty("banner", out var banEl) && banEl.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(user.Banner))
+                    user.Banner = banEl.GetString();
+                if (uEl.TryGetProperty("accent_color", out var uAcEl) && uAcEl.ValueKind == JsonValueKind.Number && uAcEl.TryGetInt32(out int uAcVal))
+                    user.AccentColor = uAcVal;
+                if (uEl.TryGetProperty("clan", out var clanEl) && clanEl.ValueKind == JsonValueKind.Object)
+                    user.Clan = JsonSerializer.Deserialize<DiscordClan>(clanEl.GetRawText());
+                if (uEl.TryGetProperty("primary_guild", out var pgEl) && pgEl.ValueKind == JsonValueKind.Object)
+                    user.PrimaryGuild = JsonSerializer.Deserialize<DiscordClan>(pgEl.GetRawText());
+            }
+
+            if (root.TryGetProperty("user_profile", out var upEl) && upEl.ValueKind == JsonValueKind.Object)
+            {
+                if (upEl.TryGetProperty("bio", out var upBio) && upBio.ValueKind == JsonValueKind.String)
+                    user.Bio = upBio.GetString();
+                if (upEl.TryGetProperty("pronouns", out var pronEl) && pronEl.ValueKind == JsonValueKind.String)
+                    user.Pronouns = pronEl.GetString();
+                if (upEl.TryGetProperty("banner", out var upBan) && upBan.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(user.Banner))
+                    user.Banner = upBan.GetString();
+                if (upEl.TryGetProperty("accent_color", out var acEl) && acEl.ValueKind == JsonValueKind.Number && acEl.TryGetInt32(out int acVal))
+                    user.AccentColor = acVal;
+            }
+
+            if (root.TryGetProperty("badges", out var badgesEl) && badgesEl.ValueKind == JsonValueKind.Array)
+            {
+                var badges = JsonSerializer.Deserialize<List<DiscordBadge>>(badgesEl.GetRawText());
+                if (badges is not null) user.Badges = badges;
+            }
+
+            if (root.TryGetProperty("connected_accounts", out var connEl) && connEl.ValueKind == JsonValueKind.Array)
+            {
+                var conns = JsonSerializer.Deserialize<List<DiscordConnectedAccount>>(connEl.GetRawText());
+                if (conns is not null)
+                {
+                    user.ConnectedAccounts = conns.Where(c => c.Visibility != 0).ToList();
+                }
+            }
+
+            // Widgets (played_games & favorite_games -> Game Collection)
+            if (root.TryGetProperty("widgets", out var widgetsEl) && widgetsEl.ValueKind == JsonValueKind.Array)
+            {
+                var rawGames = new List<(string gameId, string? comment, bool isFav)>();
+                foreach (var w in widgetsEl.EnumerateArray())
+                {
+                    if (!w.TryGetProperty("data", out var dataEl) || dataEl.ValueKind != JsonValueKind.Object) continue;
+                    var wType = dataEl.TryGetProperty("type", out var tEl) ? tEl.GetString() : "";
+                    bool isFav = string.Equals(wType, "favorite_games", StringComparison.OrdinalIgnoreCase);
+
+                    if (dataEl.TryGetProperty("games", out var gamesEl) && gamesEl.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var g in gamesEl.EnumerateArray())
+                        {
+                            var gid = g.TryGetProperty("game_id", out var gidEl) ? gidEl.GetString() : null;
+                            var comment = g.TryGetProperty("comment", out var cEl) && cEl.ValueKind == JsonValueKind.String ? cEl.GetString() : null;
+                            if (!string.IsNullOrWhiteSpace(gid) && rawGames.All(x => x.gameId != gid))
+                            {
+                                rawGames.Add((gid!, comment, isFav));
+                            }
+                        }
+                    }
+                }
+
+                if (rawGames.Count > 0)
+                {
+                    var query = string.Join("&", rawGames.Select(g => $"application_ids={Uri.EscapeDataString(g.gameId)}"));
+                    using var appResp = await _http.GetAsync($"{ApiBase}/applications/public?{query}", ct);
+                    var appMap = new Dictionary<string, (string name, string icon)>();
+                    if (appResp.IsSuccessStatusCode)
+                    {
+                        using var appDoc = await JsonDocument.ParseAsync(await appResp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                        if (appDoc.RootElement.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var appEl in appDoc.RootElement.EnumerateArray())
+                            {
+                                var id = appEl.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                                var name = appEl.TryGetProperty("name", out var nEl) ? nEl.GetString() : null;
+                                var icon = appEl.TryGetProperty("icon", out var iEl) ? iEl.GetString() : null;
+                                if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
+                                {
+                                    appMap[id!] = (name!, icon ?? "");
+                                }
+                            }
+                        }
+                    }
+
+                    var gameList = new List<DiscordWidgetGame>();
+                    foreach (var rg in rawGames)
+                    {
+                        if (appMap.TryGetValue(rg.gameId, out var info) && !string.IsNullOrWhiteSpace(info.icon))
+                        {
+                            gameList.Add(new DiscordWidgetGame
+                            {
+                                GameId = rg.gameId,
+                                Name = info.name,
+                                IconUrl = $"https://cdn.discordapp.com/app-icons/{rg.gameId}/{info.icon}.png?size=128",
+                                Comment = rg.comment,
+                                IsFavorite = rg.isFav
+                            });
+                        }
+                    }
+                    user.GameWidgets = gameList;
+                }
+            }
+
+            user.HasProfileEnriched = true;
+            Protocol.App.RunOnUiThread(() => user.NotifyProfileEnriched());
+        }
+        catch { }
+    }
+
+    public async Task<List<DiscordConnectedAccount>> GetCurrentUserVisibleConnectionsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var conns = await _http.GetFromJsonAsync<List<DiscordConnectedAccount>>($"{ApiBase}/users/@me/connections", ct);
+            if (conns is not null)
+            {
+                return conns.Where(c => c.Visibility == 1).ToList();
+            }
+        }
+        catch { }
+        return new();
+    }
+
+    public async Task<DiscordUser> ModifyCurrentUserAsync(
+        string? globalName = null,
+        string? username = null,
+        string? currentPassword = null,
+        string? newPassword = null,
+        string? bio = null,
+        string? pronouns = null,
+        string? avatarDataUri = null,
+        bool removeAvatar = false,
+        string? bannerDataUri = null,
+        bool removeBanner = false,
+        int? accentColor = null,
+        CancellationToken ct = default)
+    {
+        var userBody = new Dictionary<string, object?>();
+        if (globalName is not null) userBody["global_name"] = globalName;
+        if (!string.IsNullOrWhiteSpace(username)) userBody["username"] = username;
+        if (!string.IsNullOrWhiteSpace(currentPassword)) userBody["password"] = currentPassword;
+        if (!string.IsNullOrWhiteSpace(newPassword)) userBody["new_password"] = newPassword;
+        if (removeAvatar) userBody["avatar"] = null;
+        else if (!string.IsNullOrWhiteSpace(avatarDataUri)) userBody["avatar"] = avatarDataUri;
+        if (removeBanner) userBody["banner"] = null;
+        else if (!string.IsNullOrWhiteSpace(bannerDataUri)) userBody["banner"] = bannerDataUri;
+        if (accentColor.HasValue) userBody["accent_color"] = accentColor.Value;
+
+        if (bio is not null) userBody["bio"] = bio;
+        if (pronouns is not null) userBody["pronouns"] = pronouns;
+
+        // Mise à jour en parallèle de /users/@me/profile pour bio, pronouns et accent_color (utilisé par Discord v9)
+        if (bio is not null || pronouns is not null || accentColor.HasValue)
+        {
+            try
+            {
+                var profileBody = new Dictionary<string, object?>();
+                if (bio is not null) profileBody["bio"] = bio;
+                if (pronouns is not null) profileBody["pronouns"] = pronouns;
+                if (accentColor.HasValue) profileBody["accent_color"] = accentColor.Value;
+                using var profResp = await _http.PatchAsJsonAsync($"{ApiBase}/users/@me/profile", profileBody, ct);
+            }
+            catch { }
+        }
+
+        var response = await _http.PatchAsJsonAsync($"{ApiBase}/users/@me", userBody, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var errJson = await response.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException($"Erreur Discord ({(int)response.StatusCode}) : {errJson}");
+        }
+
+        var updated = await response.Content.ReadFromJsonAsync<DiscordUser>(cancellationToken: ct)
                ?? throw new InvalidOperationException("Réponse de mise à jour du profil illisible.");
+        if (bio is not null && string.IsNullOrEmpty(updated.Bio)) updated.Bio = bio;
+        if (pronouns is not null && string.IsNullOrEmpty(updated.Pronouns)) updated.Pronouns = pronouns;
+        await EnrichUserProfileAsync(updated, ct);
+        return updated;
+    }
+
+    public async Task UpdateCustomStatusAsync(string? customStatusText, string? status = null, CancellationToken ct = default)
+    {
+        try
+        {
+            var settingsBody = new Dictionary<string, object?>();
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                settingsBody["status"] = status;
+            }
+            if (customStatusText is not null)
+            {
+                settingsBody["custom_status"] = string.IsNullOrWhiteSpace(customStatusText)
+                    ? null
+                    : new { text = customStatusText };
+            }
+            if (settingsBody.Count > 0)
+            {
+                using var resp = await _http.PatchAsJsonAsync($"{ApiBase}/users/@me/settings", settingsBody, ct);
+            }
+        }
+        catch { }
     }
 
     public async Task<List<DiscordGuild>> GetGuildsAsync(CancellationToken ct = default) =>
@@ -256,6 +477,43 @@ public sealed class DiscordRestClient : IDisposable
     {
         var response = await _http.DeleteAsync($"{ApiBase}/users/@me/guilds/{guildId}", ct);
         response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<DiscordMessage> CreatePollMessageAsync(
+        string channelId,
+        string question,
+        List<string> answers,
+        int durationHours = 24,
+        bool allowMultiselect = false,
+        CancellationToken ct = default)
+    {
+        var pollAnswers = answers
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .Select((a, idx) => new
+            {
+                answer_id = idx + 1,
+                poll_media = new { text = a.Trim() }
+            })
+            .ToArray();
+
+        var payload = new
+        {
+            content = "",
+            nonce = Guid.NewGuid().ToString("N"),
+            poll = new
+            {
+                question = new { text = question.Trim() },
+                answers = pollAnswers,
+                duration = Math.Clamp(durationHours, 1, 768),
+                allow_multiselect = allowMultiselect,
+                layout_type = 1
+            }
+        };
+
+        var response = await _http.PostAsJsonAsync($"{ApiBase}/channels/{channelId}/messages", payload, ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<DiscordMessage>(cancellationToken: ct)
+               ?? throw new InvalidOperationException("Réponse de création de sondage illisible.");
     }
 
     public async Task TriggerTypingAsync(string channelId, CancellationToken ct = default) =>
